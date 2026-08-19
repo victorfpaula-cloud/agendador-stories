@@ -1,0 +1,23 @@
+# Alternativa ao pg_cron (use uma OU outra, não as duas).
+# Chama a rota de publicação a cada 5 minutos usando o agendador gratuito do GitHub Actions.
+# Configure em Settings > Secrets and variables > Actions deste repositório:
+#   SITE_URL   = https://seu-dominio.vercel.app
+#   CRON_SECRET = o mesmo valor da variável de ambiente CRON_SECRET do projeto
+
+name: Publicar stories agendados
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  run-cron:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Chamar rota de publicacao
+        run: |
+          curl -sS -X POST "${{ secrets.SITE_URL }}/api/cron/run" \
+            -H "Content-Type: application/json" \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
+            --max-time 60 --fail
