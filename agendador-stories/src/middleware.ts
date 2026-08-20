@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 
-const ROTAS_PUBLICAS = ["/login", "/api/cron/run"];
+const ROTAS_PUBLICAS = ["/", "/login", "/api/cron/run"];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
