@@ -6,6 +6,35 @@ import type { ScheduleSlot } from "@/types/database";
 
 const LINHAS_MINIMAS = 5;
 
+// Faz a chamada e trata com segurança os casos em que a resposta não é o JSON
+// esperado (ex: sessão expirou e o servidor devolveu a página de login em HTML).
+// Sem isso, o app ficava travado silenciosamente em "Salvando…" sem avisar nada.
+async function chamarApi(input: string, init?: RequestInit) {
+  let res: Response;
+  try {
+    res = await fetch(input, init);
+  } catch {
+    throw new Error("Sem conexão com o servidor. Verifique sua internet e tente de novo.");
+  }
+
+  if (res.status === 401 || res.redirected || res.url.includes("/login")) {
+    throw new Error("Sua sessão expirou. Atualize a página e faça login de novo antes de salvar.");
+  }
+
+  let json: any = null;
+  try {
+    json = await res.json();
+  } catch {
+    throw new Error("O servidor respondeu de um jeito inesperado. Atualize a página e tente de novo.");
+  }
+
+  if (!res.ok) {
+    throw new Error(json?.erro || "Ocorreu um erro. Tente novamente.");
+  }
+
+  return json;
+}
+
 export default function WeekEditor({
   accountId,
   initialSlots,
@@ -90,39 +119,44 @@ function LinhaSalva({
   async function trocarHorario(novoHorario: string) {
     setCarregando(true);
     setErro(null);
-    const fd = new FormData();
-    fd.set("time_of_day", novoHorario);
-    const res = await fetch(`/api/slots/${slot.id}`, { method: "PATCH", body: fd });
-    const json = await res.json();
-    setCarregando(false);
-    if (!res.ok) {
-      setErro(json.erro || "Erro ao salvar horário.");
-      return;
+    try {
+      const fd = new FormData();
+      fd.set("time_of_day", novoHorario);
+      const json = await chamarApi(`/api/slots/${slot.id}`, { method: "PATCH", body: fd });
+      onAtualizar(json.slot);
+    } catch (err) {
+      setErro(err instanceof Error ? err.message : "Erro ao salvar horário.");
+    } finally {
+      setCarregando(false);
     }
-    onAtualizar(json.slot);
   }
 
   async function trocarMidia(file: File) {
     setCarregando(true);
     setErro(null);
-    const fd = new FormData();
-    fd.set("file", file);
-    const res = await fetch(`/api/slots/${slot.id}`, { method: "PATCH", body: fd });
-    const json = await res.json();
-    setCarregando(false);
-    if (!res.ok) {
-      setErro(json.erro || "Erro ao trocar mídia.");
-      return;
+    try {
+      const fd = new FormData();
+      fd.set("file", file);
+      const json = await chamarApi(`/api/slots/${slot.id}`, { method: "PATCH", body: fd });
+      onAtualizar(json.slot);
+    } catch (err) {
+      setErro(err instanceof Error ? err.message : "Erro ao trocar mídia.");
+    } finally {
+      setCarregando(false);
     }
-    onAtualizar(json.slot);
   }
 
   async function remover() {
     if (!confirm("Remover este horário da rotina?")) return;
     setCarregando(true);
-    const res = await fetch(`/api/slots/${slot.id}`, { method: "DELETE" });
-    setCarregando(false);
-    if (res.ok) onRemover(slot.id);
+    setErro(null);
+    try {
+      await chamarApi(`/api/slots/${slot.id}`, { method: "DELETE" });
+      onRemover(slot.id);
+    } catch (err) {
+      setErro(err instanceof Error ? err.message : "Erro ao remover.");
+      setCarregando(false);
+    }
   }
 
   return (
@@ -144,6 +178,7 @@ function LinhaSalva({
             type="file"
             accept="image/*,video/*"
             className="hidden"
+            disabled={carregando}
             onChange={(e) => e.target.files?.[0] && trocarMidia(e.target.files[0])}
           />
         </label>
@@ -154,7 +189,7 @@ function LinhaSalva({
           disabled={carregando}
           className="ml-auto text-xs text-red-500 hover:text-red-700"
         >
-          Remover
+          {carregando ? "…" : "Remover"}
         </button>
       </div>
       {erro && <p className="mt-1 text-xs text-red-600">{erro}</p>}
@@ -184,21 +219,21 @@ function LinhaNova({
     setCarregando(true);
     setErro(null);
 
-    const fd = new FormData();
-    fd.set("day_of_week", String(diaSemana));
-    fd.set("time_of_day", horario);
-    fd.set("file", file);
+    try {
+      const fd = new FormData();
+      fd.set("day_of_week", String(diaSemana));
+      fd.set("time_of_day", horario);
+      fd.set("file", file);
 
-    const res = await fetch(`/api/accounts/${accountId}/slots`, { method: "POST", body: fd });
-    const json = await res.json();
-    setCarregando(false);
-
-    if (!res.ok) {
-      setErro(json.erro || "Erro ao salvar.");
-      return;
+      const json = await chamarApi(`/api/accounts/${accountId}/slots`, { method: "POST", body: fd });
+      onSalvo(json.slot);
+      setHorario("");
+      setFile(null);
+    } catch (err) {
+      setErro(err instanceof Error ? err.message : "Erro ao salvar.");
+    } finally {
+      setCarregando(false);
     }
-
-    onSalvo(json.slot);
   }
 
   return (
