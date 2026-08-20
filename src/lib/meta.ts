@@ -50,8 +50,6 @@ export function montarUrlAutorizacaoFacebook(state: string) {
     [
       "email",
       "public_profile",
-      "pages_read_engagement",
-      "pages_read_user_content",
     ].join(",")
   );
   return url.toString();
