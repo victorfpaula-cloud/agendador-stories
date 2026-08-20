@@ -45,13 +45,7 @@ export function montarUrlAutorizacaoFacebook(state: string) {
   url.searchParams.set("client_id", process.env.FACEBOOK_APP_ID!);
   url.searchParams.set("redirect_uri", process.env.FACEBOOK_REDIRECT_URI!);
   url.searchParams.set("state", state);
-  url.searchParams.set(
-    "scope",
-    [
-      "email",
-      "public_profile",
-    ].join(",")
-  );
+  url.searchParams.set("scope", "public_profile");
   return url.toString();
 }
 
