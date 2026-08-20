@@ -54,7 +54,7 @@ export default async function ContasPage({
         ))}
 
         <a
-          href="/api/auth/facebook"
+          href="/api/accounts/connect"
           className="flex flex-col items-center justify-center rounded-xl2 border-2 border-dashed border-slate-300 p-5 text-slate-500 transition hover:border-brand-400 hover:text-brand-600"
         >
           <span className="mb-1 text-2xl leading-none">+</span>
