@@ -49,13 +49,12 @@ export function montarUrlAutorizacaoFacebook(state: string) {
     "scope",
     [
       "email",
-"public_profile",
-"pages_show_list",
-"pages_read_engagement",
-"pages_read_user_content",
-"pages_manage_metadata",
-"instagram_basic",
-"instagram_graph_api",
+      "public_profile",
+      "pages_show_list",
+      "pages_read_engagement",
+      "pages_read_user_content",
+      "pages_manage_metadata",
+      "instagram_basic",
     ].join(",")
   );
   return url.toString();
