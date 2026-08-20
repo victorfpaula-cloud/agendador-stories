@@ -35,6 +35,15 @@ export async function middleware(req: NextRequest) {
   } = await supabase.auth.getSession();
 
   if (!session) {
+    // Chamadas de API (fetch do navegador) precisam de uma resposta JSON com
+    // status 401, não de um redirect pra página de login em HTML — senão o
+    // app trava tentando interpretar HTML como JSON e nada é salvo.
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json(
+        { erro: "Sessão expirada. Atualize a página e faça login de novo." },
+        { status: 401 }
+      );
+    }
     const loginUrl = new URL("/login", req.url);
     return NextResponse.redirect(loginUrl);
   }
