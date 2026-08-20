@@ -48,11 +48,14 @@ export function montarUrlAutorizacaoFacebook(state: string) {
   url.searchParams.set(
     "scope",
     [
-      "pages_show_list",
-      "pages_read_engagement",
-      "instagram_basic",
-      "instagram_content_publish",
-      "business_management",
+      "email",
+"public_profile",
+"pages_show_list",
+"pages_read_engagement",
+"pages_read_user_content",
+"pages_manage_metadata",
+"instagram_basic",
+"instagram_graph_api",
     ].join(",")
   );
   return url.toString();
