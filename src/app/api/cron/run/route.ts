@@ -77,25 +77,41 @@ async function executar(req: NextRequest) {
         mediaType: slot.media_type,
       });
 
-      await admin.from("publish_log").insert({
-        slot_id: slot.id,
-        account_id: conta.id,
-        scheduled_for: dataISO,
-        status: "success",
-        ig_media_id: igMediaId,
-      });
+      // upsert, não insert: já existe uma linha de ERRO de uma tentativa
+      // anterior de hoje (a tabela só permite uma linha por slot+dia). Com
+      // insert, essa chamada falhava por violar essa trava, o sucesso nunca
+      // ficava registrado, e o próximo ciclo do cron achava que ainda
+      // precisava tentar de novo — publicando o mesmo Story várias vezes.
+      await admin
+        .from("publish_log")
+        .upsert(
+          {
+            slot_id: slot.id,
+            account_id: conta.id,
+            scheduled_for: dataISO,
+            status: "success",
+            ig_media_id: igMediaId,
+            error_message: null,
+          },
+          { onConflict: "slot_id,scheduled_for" }
+        );
 
       resultados.push({ slotId: slot.id, conta: conta.name, status: "success" });
     } catch (err) {
       const msg = err instanceof MetaApiError || err instanceof Error ? err.message : "Erro desconhecido";
 
-      await admin.from("publish_log").insert({
-        slot_id: slot.id,
-        account_id: conta.id,
-        scheduled_for: dataISO,
-        status: "error",
-        error_message: msg,
-      });
+      await admin
+        .from("publish_log")
+        .upsert(
+          {
+            slot_id: slot.id,
+            account_id: conta.id,
+            scheduled_for: dataISO,
+            status: "error",
+            error_message: msg,
+          },
+          { onConflict: "slot_id,scheduled_for" }
+        );
 
       resultados.push({ slotId: slot.id, conta: conta.name, status: "error", detalhe: msg });
     }
