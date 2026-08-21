@@ -55,15 +55,19 @@ async function executar(req: NextRequest) {
   for (const slot of devidos) {
     const conta = slot.accounts;
 
-    // Evita duplicidade: já existe um log de sucesso ou erro pra esse slot nessa data?
-    const { data: jaExecutado } = await admin
+    // Evita duplicidade: já existe uma publicação de SUCESSO pra esse slot nessa
+    // data? Se só existe erro, deixa tentar de novo — o cron roda a cada 5 min,
+    // então uma falha passageira (ex: o Instagram ainda processando a imagem)
+    // tem novas chances dentro da janela de tolerância, em vez de desistir de vez.
+    const { data: jaPublicado } = await admin
       .from("publish_log")
       .select("id")
       .eq("slot_id", slot.id)
       .eq("scheduled_for", dataISO)
+      .eq("status", "success")
       .maybeSingle();
 
-    if (jaExecutado) continue;
+    if (jaPublicado) continue;
 
     try {
       const igMediaId = await publicarStory({
