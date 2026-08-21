@@ -1,7 +1,7 @@
-import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Account } from "@/types/database";
 import LogoutButton from "./LogoutButton";
+import ListaContas from "./ListaContas";
 
 export const dynamic = "force-dynamic";
 
@@ -36,36 +36,13 @@ export default async function ContasPage({
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {lista.map((conta) => (
-          <Link
-            key={conta.id}
-            href={`/contas/${conta.id}`}
-            className="group rounded-xl2 bg-white p-5 shadow-sm ring-1 ring-slate-200 transition hover:shadow-md hover:ring-brand-200"
-          >
-            <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-brand-50 text-lg font-semibold text-brand-600">
-              {conta.name.charAt(0).toUpperCase()}
-            </div>
-            <p className="font-medium text-slate-900 group-hover:text-brand-700">{conta.name}</p>
-            <p className="text-sm text-slate-500">
-              {conta.ig_username ? `@${conta.ig_username}` : "Instagram conectado"}
-            </p>
-          </Link>
-        ))}
-
-        <a
-          href="/api/accounts/connect"
-          className="flex flex-col items-center justify-center rounded-xl2 border-2 border-dashed border-slate-300 p-5 text-slate-500 transition hover:border-brand-400 hover:text-brand-600"
-        >
-          <span className="mb-1 text-2xl leading-none">+</span>
-          <span className="text-sm font-medium">Adicionar conta</span>
-        </a>
-      </div>
+      <ListaContas initialContas={lista} />
 
       {lista.length > 0 && (
         <p className="mt-8 text-xs text-slate-400">
           Token de uma conta expirando ou publicações falhando por erro de permissão? Clique em
           "Adicionar conta" de novo e escolha a mesma página — isso renova a conexão sem duplicar nada.
+          Uma conta pausada não publica nada até você retomá-la, e nada é apagado nesse caso.
         </p>
       )}
     </main>
