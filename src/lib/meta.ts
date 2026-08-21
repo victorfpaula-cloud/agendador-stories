@@ -157,9 +157,12 @@ export async function publicarContainer(igUserId: string, containerId: string, p
 export async function publicarStory(params: CriarContainerParams): Promise<string> {
   const containerId = await criarContainerDeStory(params);
 
-  if (params.mediaType === "VIDEO") {
-    await esperarContainerFicarPronto(containerId, params.pageAccessToken);
-  }
+  // Antes, só esperava o processamento terminar pra vídeo — mas o Instagram
+  // também processa imagens do lado dele (baixa a URL, valida) e às vezes
+  // isso não é instantâneo. Publicar cedo demais gera o erro "Media ID is
+  // not available". Por isso agora espera ficar pronto pros dois tipos —
+  // na prática, pra imagem isso quase sempre resolve na primeira checagem.
+  await esperarContainerFicarPronto(containerId, params.pageAccessToken);
 
   return publicarContainer(params.igUserId, containerId, params.pageAccessToken);
 }
