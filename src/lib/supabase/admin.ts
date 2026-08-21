@@ -18,5 +18,13 @@ export function createAdminClient() {
 
   return createClient(url, serviceKey, {
     auth: { autoRefreshToken: false, persistSession: false },
+    // Força toda consulta feita por esse cliente a nunca ser guardada em
+    // cache pelo Next.js — sem isso, algumas rotas podem devolver uma
+    // resposta antiga guardada em cache em vez de consultar o banco de
+    // verdade, o que já causou pelo menos um horário "sumir" da tela mesmo
+    // estando salvo certinho no banco.
+    global: {
+      fetch: (input, init) => fetch(input, { ...init, cache: "no-store" }),
+    },
   });
 }
