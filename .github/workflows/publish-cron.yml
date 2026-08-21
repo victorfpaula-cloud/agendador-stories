@@ -1,5 +1,8 @@
 # Alternativa ao pg_cron (use uma OU outra, não as duas).
-# Chama a rota de publicação a cada 5 minutos usando o agendador gratuito do GitHub Actions.
+# O agendamento automático (schedule) foi DESATIVADO de propósito: o pg_cron
+# já é o agendador em produção, e os dois rodando juntos causaram publicação
+# duplicada (o mesmo Story postado várias vezes). Deixado só pra rodar manualmente
+# (workflow_dispatch), caso precise testar a rota sem esperar o pg_cron disparar.
 # Configure em Settings > Secrets and variables > Actions deste repositório:
 #   SITE_URL   = https://seu-dominio.vercel.app
 #   CRON_SECRET = o mesmo valor da variável de ambiente CRON_SECRET do projeto
@@ -7,8 +10,6 @@
 name: Publicar stories agendados
 
 on:
-  schedule:
-    - cron: "*/5 * * * *"
   workflow_dispatch: {}
 
 jobs:
