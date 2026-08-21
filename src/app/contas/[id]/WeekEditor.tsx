@@ -1,8 +1,11 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { DIAS_SEMANA } from "@/lib/days";
 import type { ScheduleSlot } from "@/types/database";
+
+type StatusHoje = "success" | "error" | "pendente";
 
 const LINHAS_MINIMAS = 5;
 
@@ -38,12 +41,26 @@ async function chamarApi(input: string, init?: RequestInit) {
 export default function WeekEditor({
   accountId,
   initialSlots,
+  diaHoje,
+  logsHoje,
 }: {
   accountId: string;
   initialSlots: ScheduleSlot[];
+  diaHoje: number;
+  logsHoje: Record<string, "success" | "error">;
 }) {
+  const router = useRouter();
   const [slots, setSlots] = useState<ScheduleSlot[]>(initialSlots);
   const [linhasExtras, setLinhasExtras] = useState<Record<number, number>>({});
+  const [atualizando, setAtualizando] = useState(false);
+
+  function atualizarAgora() {
+    setAtualizando(true);
+    router.refresh();
+    // O router.refresh() não avisa quando termina, então só tira o "Atualizando…"
+    // depois de um tempinho — é só um feedback visual, não trava nada.
+    setTimeout(() => setAtualizando(false), 1000);
+  }
 
   function adicionarLinha(dia: number) {
     setLinhasExtras((atual) => ({ ...atual, [dia]: (atual[dia] ?? 0) + 1 }));
@@ -62,44 +79,78 @@ export default function WeekEditor({
   }
 
   return (
-    <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 xl:grid-cols-3">
-      {DIAS_SEMANA.map((dia) => {
-        const doDia = slots
-          .filter((s) => s.day_of_week === dia.value)
-          .sort((a, b) => a.time_of_day.localeCompare(b.time_of_day));
+    <div>
+      <div className="mb-4 flex items-center justify-between text-xs text-slate-400">
+        <p>
+          A bolinha de status (
+          <span className="text-amber-500">●</span> aguardando ·{" "}
+          <span className="text-green-500">●</span> publicado ·{" "}
+          <span className="text-red-500">●</span> erro) só aparece no dia de hoje —
+          nos outros dias ainda não houve nenhuma tentativa.
+        </p>
+        <button
+          type="button"
+          onClick={atualizarAgora}
+          disabled={atualizando}
+          className="ml-3 shrink-0 rounded-md border border-slate-200 px-2.5 py-1 font-medium text-slate-500 hover:border-brand-300 hover:text-brand-600 disabled:opacity-60"
+        >
+          {atualizando ? "Atualizando…" : "↻ Atualizar"}
+        </button>
+      </div>
 
-        const totalLinhas = Math.max(LINHAS_MINIMAS, doDia.length) + (linhasExtras[dia.value] ?? 0);
-        const linhasVaziasQtd = Math.max(0, totalLinhas - doDia.length);
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 xl:grid-cols-3">
+        {DIAS_SEMANA.map((dia) => {
+          const doDia = slots
+            .filter((s) => s.day_of_week === dia.value)
+            .sort((a, b) => a.time_of_day.localeCompare(b.time_of_day));
 
-        return (
-          <section key={dia.value} className="rounded-xl2 bg-white p-4 shadow-sm ring-1 ring-slate-200">
-            <h2 className="mb-3 font-semibold text-slate-900">{dia.label}</h2>
+          const totalLinhas = Math.max(LINHAS_MINIMAS, doDia.length) + (linhasExtras[dia.value] ?? 0);
+          const linhasVaziasQtd = Math.max(0, totalLinhas - doDia.length);
+          const ehHoje = dia.value === diaHoje;
 
-            <div className="space-y-2">
-              {doDia.map((slot) => (
-                <LinhaSalva key={slot.id} slot={slot} onAtualizar={aoAtualizar} onRemover={aoRemover} />
-              ))}
+          return (
+            <section key={dia.value} className="rounded-xl2 bg-white p-4 shadow-sm ring-1 ring-slate-200">
+              <h2 className="mb-3 flex items-center gap-2 font-semibold text-slate-900">
+                {dia.label}
+                {ehHoje && (
+                  <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-medium text-brand-600">
+                    hoje
+                  </span>
+                )}
+              </h2>
 
-              {Array.from({ length: linhasVaziasQtd }).map((_, i) => (
-                <LinhaNova
-                  key={`${dia.value}-nova-${i}`}
-                  accountId={accountId}
-                  diaSemana={dia.value}
-                  onSalvo={aoSalvarNovo}
-                />
-              ))}
-            </div>
+              <div className="space-y-2">
+                {doDia.map((slot) => (
+                  <LinhaSalva
+                    key={slot.id}
+                    slot={slot}
+                    onAtualizar={aoAtualizar}
+                    onRemover={aoRemover}
+                    status={ehHoje ? logsHoje[slot.id] ?? "pendente" : undefined}
+                  />
+                ))}
 
-            <button
-              type="button"
-              onClick={() => adicionarLinha(dia.value)}
-              className="mt-3 text-sm font-medium text-brand-600 hover:text-brand-700"
-            >
-              + Adicionar horário
-            </button>
-          </section>
-        );
-      })}
+                {Array.from({ length: linhasVaziasQtd }).map((_, i) => (
+                  <LinhaNova
+                    key={`${dia.value}-nova-${i}`}
+                    accountId={accountId}
+                    diaSemana={dia.value}
+                    onSalvo={aoSalvarNovo}
+                  />
+                ))}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => adicionarLinha(dia.value)}
+                className="mt-3 text-sm font-medium text-brand-600 hover:text-brand-700"
+              >
+                + Adicionar horário
+              </button>
+            </section>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -108,10 +159,12 @@ function LinhaSalva({
   slot,
   onAtualizar,
   onRemover,
+  status,
 }: {
   slot: ScheduleSlot;
   onAtualizar: (slot: ScheduleSlot) => void;
   onRemover: (id: string) => void;
+  status?: StatusHoje;
 }) {
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -162,6 +215,7 @@ function LinhaSalva({
   return (
     <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5">
       <div className="flex items-center gap-2">
+        {status && <BolinhaStatus status={status} />}
         <MiniaturaMidia url={slot.media_url} tipo={slot.media_type} />
 
         <input
@@ -267,6 +321,23 @@ function LinhaNova({
       </div>
       {erro && <p className="mt-1 text-xs text-red-600">{erro}</p>}
     </div>
+  );
+}
+
+const STATUS_INFO: Record<StatusHoje, { cor: string; titulo: string }> = {
+  pendente: { cor: "bg-amber-400", titulo: "Aguardando publicação de hoje" },
+  success: { cor: "bg-green-500", titulo: "Publicado hoje com sucesso" },
+  error: { cor: "bg-red-500", titulo: "Erro ao publicar hoje" },
+};
+
+function BolinhaStatus({ status }: { status: StatusHoje }) {
+  const info = STATUS_INFO[status];
+  return (
+    <span
+      title={info.titulo}
+      aria-label={info.titulo}
+      className={`h-2.5 w-2.5 shrink-0 rounded-full ${info.cor}`}
+    />
   );
 }
 
