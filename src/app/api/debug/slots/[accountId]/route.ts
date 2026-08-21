@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+export const dynamic = "force-dynamic";
+
 // Rota temporária de diagnóstico: faz exatamente a mesma consulta que
 // /contas/[id]/page.tsx usa pra buscar os horários, mas devolve o
 // resultado cru em JSON, sem passar pelo React/Next render — serve pra
