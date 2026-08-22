@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { DIAS_SEMANA } from "@/lib/days";
+import { prepararImagem } from "@/lib/imagemCliente";
 import type { ScheduleSlot } from "@/types/database";
 
 type StatusHoje = "success" | "error" | "pendente";
@@ -188,8 +189,9 @@ function LinhaSalva({
     setCarregando(true);
     setErro(null);
     try {
+      const arquivoFinal = await prepararImagem(file);
       const fd = new FormData();
-      fd.set("file", file);
+      fd.set("file", arquivoFinal);
       const json = await chamarApi(`/api/slots/${slot.id}`, { method: "PATCH", body: fd });
       onAtualizar(json.slot);
     } catch (err) {
@@ -274,10 +276,11 @@ function LinhaNova({
     setErro(null);
 
     try {
+      const arquivoFinal = await prepararImagem(file);
       const fd = new FormData();
       fd.set("day_of_week", String(diaSemana));
       fd.set("time_of_day", horario);
-      fd.set("file", file);
+      fd.set("file", arquivoFinal);
 
       const json = await chamarApi(`/api/accounts/${accountId}/slots`, { method: "POST", body: fd });
       onSalvo(json.slot);
