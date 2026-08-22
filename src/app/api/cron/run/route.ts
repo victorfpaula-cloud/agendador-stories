@@ -29,7 +29,18 @@ async function executar(req: NextRequest) {
   }
 
   const admin = createAdminClient();
-  const { diaSemanaIso, horaMinuto, dataISO } = agoraEmSaoPaulo();
+
+  let diaSemanaIso: number, horaMinuto: string, dataISO: string;
+  try {
+    ({ diaSemanaIso, horaMinuto, dataISO } = agoraEmSaoPaulo());
+  } catch (err) {
+    // Se não der pra determinar com segurança que dia/hora é agora, é mais
+    // seguro não publicar nada nesse ciclo do que arriscar publicar no dia
+    // errado. O próximo ciclo do cron tenta de novo em 5 minutos.
+    const msg = err instanceof Error ? err.message : "Erro desconhecido";
+    return NextResponse.json({ erro: `Abortado por segurança: ${msg}` }, { status: 500 });
+  }
+
   const minutosAgora = paraMinutos(horaMinuto);
 
   const { data: slotsDoDia, error } = await admin
