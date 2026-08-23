@@ -52,3 +52,34 @@ export async function enviarMidia(admin: SupabaseClient, accountId: string, file
 export async function removerMidia(admin: SupabaseClient, path: string) {
   await admin.storage.from(BUCKET).remove([path]);
 }
+
+// Usado por "Duplicar rotina": copia de verdade o arquivo de mídia pra uma
+// pasta nova, da conta de destino, em vez de só reaproveitar o mesmo link.
+// Isso é importante — se as duas contas apontassem pro mesmo arquivo, trocar
+// ou remover a mídia numa conta quebraria a outra silenciosamente. Copiando,
+// as duas ficam 100% independentes dali em diante.
+export async function duplicarMidia(admin: SupabaseClient, accountIdDestino: string, pathOrigem: string) {
+  const { data: arquivoOrigem, error: erroDownload } = await admin.storage.from(BUCKET).download(pathOrigem);
+
+  if (erroDownload || !arquivoOrigem) {
+    throw new Error(`Falha ao ler a mídia original: ${erroDownload?.message ?? "arquivo não encontrado"}`);
+  }
+
+  const extensao = (pathOrigem.split(".").pop() || "dat").toLowerCase();
+  const path = `${accountIdDestino}/${randomUUID()}.${extensao}`;
+
+  const buffer = Buffer.from(await arquivoOrigem.arrayBuffer());
+
+  const { error: erroUpload } = await admin.storage.from(BUCKET).upload(path, buffer, {
+    contentType: arquivoOrigem.type || undefined,
+    upsert: false,
+  });
+
+  if (erroUpload) {
+    throw new Error(`Falha ao salvar a cópia da mídia: ${erroUpload.message}`);
+  }
+
+  const { data: pub } = admin.storage.from(BUCKET).getPublicUrl(path);
+
+  return { url: pub.publicUrl, path };
+}
