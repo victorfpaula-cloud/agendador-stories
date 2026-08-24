@@ -2,7 +2,10 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { nomeDia } from "@/lib/days";
 import type { Account } from "@/types/database";
+
+export type ResumoDoDia = { total: number; postados: number; erros: number };
 
 // Mesmo padrão de tratamento de erro usado no editor de horários: evita
 // travar silenciosamente se a sessão expirou ou o servidor respondeu
@@ -33,7 +36,15 @@ async function chamarApi(input: string, init?: RequestInit) {
   return json;
 }
 
-export default function ListaContas({ initialContas }: { initialContas: Account[] }) {
+export default function ListaContas({
+  initialContas,
+  diaHoje,
+  resumoHoje,
+}: {
+  initialContas: Account[];
+  diaHoje: number;
+  resumoHoje: Record<string, ResumoDoDia>;
+}) {
   const [contas, setContas] = useState<Account[]>(initialContas);
 
   function aoAtualizar(conta: Account) {
@@ -47,7 +58,14 @@ export default function ListaContas({ initialContas }: { initialContas: Account[
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
       {contas.map((conta) => (
-        <ContaCard key={conta.id} conta={conta} onAtualizar={aoAtualizar} onRemover={aoRemover} />
+        <ContaCard
+          key={conta.id}
+          conta={conta}
+          resumo={resumoHoje[conta.id] ?? { total: 0, postados: 0, erros: 0 }}
+          diaHoje={diaHoje}
+          onAtualizar={aoAtualizar}
+          onRemover={aoRemover}
+        />
       ))}
 
       <a
@@ -63,10 +81,14 @@ export default function ListaContas({ initialContas }: { initialContas: Account[
 
 function ContaCard({
   conta,
+  resumo,
+  diaHoje,
   onAtualizar,
   onRemover,
 }: {
   conta: Account;
+  resumo: ResumoDoDia;
+  diaHoje: number;
   onAtualizar: (conta: Account) => void;
   onRemover: (id: string) => void;
 }) {
@@ -126,11 +148,22 @@ function ContaCard({
             </span>
           )}
         </div>
-        <p className="font-medium text-slate-900 group-hover:text-brand-700">{conta.name}</p>
+        <p className="flex items-center gap-1.5 font-medium text-slate-900 group-hover:text-brand-700">
+          {conta.is_active && (
+            <span
+              title="Ativa"
+              aria-label="Ativa"
+              className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-green-500"
+            />
+          )}
+          {conta.name}
+        </p>
         <p className="text-sm text-slate-500">
           {conta.ig_username ? `@${conta.ig_username}` : "Instagram conectado"}
         </p>
       </Link>
+
+      <ResumoDoDiaPainel resumo={resumo} diaHoje={diaHoje} />
 
       <div className="mt-4 flex items-center gap-3 border-t border-slate-100 pt-3">
         <button
@@ -151,6 +184,42 @@ function ContaCard({
         </button>
       </div>
       {erro && <p className="mt-2 text-xs text-red-600">{erro}</p>}
+    </div>
+  );
+}
+
+// Miniquadro com o resumo de hoje: quantos horários tem no dia, quantos já
+// foram publicados e quantos deram erro, com uma barrinha que vai
+// enchendo conforme o dia avança. Como sempre calcula em cima do dia atual
+// (via agoraEmSaoPaulo no servidor), zera sozinho na virada da meia-noite —
+// não precisa de nenhuma lógica extra de "reset".
+function ResumoDoDiaPainel({ resumo, diaHoje }: { resumo: ResumoDoDia; diaHoje: number }) {
+  const { total, postados, erros } = resumo;
+
+  if (total === 0) {
+    return (
+      <div className="mt-3 rounded-lg bg-slate-50 px-2.5 py-2 text-xs text-slate-400">
+        {nomeDia(diaHoje)} · nenhum horário agendado hoje
+      </div>
+    );
+  }
+
+  const pctPostado = Math.min(100, Math.round((postados / total) * 100));
+  const pctErro = Math.min(100 - pctPostado, Math.round((erros / total) * 100));
+
+  return (
+    <div className="mt-3 rounded-lg bg-slate-50 px-2.5 py-2 text-xs">
+      <div className="mb-1.5 flex items-center justify-between gap-2">
+        <span className="font-medium text-slate-600">{nomeDia(diaHoje)}</span>
+        <span className="text-slate-500">
+          {postados} de {total} postados
+          {erros > 0 && <span className="text-red-500"> · {erros} com erro</span>}
+        </span>
+      </div>
+      <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-slate-200">
+        <div className="h-full bg-green-500 transition-all" style={{ width: `${pctPostado}%` }} />
+        <div className="h-full bg-red-500 transition-all" style={{ width: `${pctErro}%` }} />
+      </div>
     </div>
   );
 }
