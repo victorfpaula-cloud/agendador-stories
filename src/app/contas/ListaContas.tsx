@@ -1,11 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { nomeDia } from "@/lib/days";
 import type { Account } from "@/types/database";
 
 export type ResumoDoDia = { total: number; postados: number; erros: number };
+
+// Intervalo do "recheck" automático do resumo do dia. Não é tempo real de
+// verdade (o servidor não avisa o navegador na hora que publica) — é um
+// polling simples: a cada 45s, se a aba estiver visível, busca os números
+// atualizados. É pouquíssimo processamento (uma consulta leve) e cobre bem
+// o caso de uso: deixar a tela de contas aberta e ver os números subindo
+// sozinhos ao longo do dia, sem precisar dar refresh manual.
+const INTERVALO_RESUMO_MS = 45_000;
 
 // Mesmo padrão de tratamento de erro usado no editor de horários: evita
 // travar silenciosamente se a sessão expirou ou o servidor respondeu
@@ -46,6 +54,8 @@ export default function ListaContas({
   resumoHoje: Record<string, ResumoDoDia>;
 }) {
   const [contas, setContas] = useState<Account[]>(initialContas);
+  const [diaAtual, setDiaAtual] = useState(diaHoje);
+  const [resumoAtual, setResumoAtual] = useState<Record<string, ResumoDoDia>>(resumoHoje);
 
   function aoAtualizar(conta: Account) {
     setContas((atual) => atual.map((c) => (c.id === conta.id ? conta : c)));
@@ -55,14 +65,45 @@ export default function ListaContas({
     setContas((atual) => atual.filter((c) => c.id !== id));
   }
 
+  // Recheck automático do resumo do dia, só enquanto a aba está visível
+  // (evita gastar chamada à toa com a aba em segundo plano) — e já busca de
+  // novo assim que a aba volta a ficar visível, pra não ficar com número
+  // atrasado depois de um tempo fora dela.
+  useEffect(() => {
+    let cancelado = false;
+
+    async function buscarResumo() {
+      if (document.visibilityState !== "visible") return;
+      try {
+        const json = await chamarApi("/api/contas/resumo-do-dia");
+        if (cancelado) return;
+        setResumoAtual(json.resumo);
+        setDiaAtual(json.diaHoje);
+      } catch {
+        // Falha silenciosa: é só um recheck em segundo plano, tenta de
+        // novo no próximo ciclo. Se for sessão expirada de verdade, o
+        // usuário vai perceber ao tentar pausar/excluir uma conta.
+      }
+    }
+
+    const intervalo = setInterval(buscarResumo, INTERVALO_RESUMO_MS);
+    document.addEventListener("visibilitychange", buscarResumo);
+
+    return () => {
+      cancelado = true;
+      clearInterval(intervalo);
+      document.removeEventListener("visibilitychange", buscarResumo);
+    };
+  }, []);
+
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
       {contas.map((conta) => (
         <ContaCard
           key={conta.id}
           conta={conta}
-          resumo={resumoHoje[conta.id] ?? { total: 0, postados: 0, erros: 0 }}
-          diaHoje={diaHoje}
+          resumo={resumoAtual[conta.id] ?? { total: 0, postados: 0, erros: 0 }}
+          diaHoje={diaAtual}
           onAtualizar={aoAtualizar}
           onRemover={aoRemover}
         />
