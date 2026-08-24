@@ -48,8 +48,8 @@ export default async function ContaPage({ params }: { params: { id: string } }) 
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-10">
-      <div className="mb-8 flex items-center justify-between">
-        <div>
+      <div className="mb-8 flex items-start justify-between gap-3">
+        <div className="min-w-0">
           <Link href="/contas" className="text-sm text-slate-500 hover:underline">
             ← Todas as contas
           </Link>
@@ -58,20 +58,20 @@ export default async function ContaPage({ params }: { params: { id: string } }) 
             {(conta as Account).ig_username ? `@${(conta as Account).ig_username}` : "Instagram conectado"} ·
             rotina semanal de Stories
           </p>
+          <div className="mt-3">
+            <DuplicarRotina
+              contaAtualId={(conta as Account).id}
+              contaAtualNome={(conta as Account).name}
+              outrasContas={(outrasContas ?? []) as { id: string; name: string }[]}
+            />
+          </div>
         </div>
-        <div className="flex items-start gap-3">
-          <DuplicarRotina
-            contaAtualId={(conta as Account).id}
-            contaAtualNome={(conta as Account).name}
-            outrasContas={(outrasContas ?? []) as { id: string; name: string }[]}
-          />
-          <a
-            href="/api/accounts/connect"
-            className="whitespace-nowrap rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:border-brand-400 hover:text-brand-600"
-          >
-            Reconectar
-          </a>
-        </div>
+        <a
+          href="/api/accounts/connect"
+          className="whitespace-nowrap rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:border-brand-400 hover:text-brand-600"
+        >
+          Reconectar
+        </a>
       </div>
 
       <WeekEditor
