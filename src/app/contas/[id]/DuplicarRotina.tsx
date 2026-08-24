@@ -41,7 +41,10 @@ export default function DuplicarRotina({
   contaAtualNome: string;
   outrasContas: ContaSimples[];
 }) {
-  const [origemId, setOrigemId] = useState(outrasContas[0]?.id ?? "");
+  // Começa vazio de propósito (nenhuma conta pré-selecionada) — assim o
+  // primeiro item da lista sempre foi um placeholder neutro, nunca uma conta
+  // de verdade, evitando duplicar da conta errada sem querer.
+  const [origemId, setOrigemId] = useState("");
   const [carregando, setCarregando] = useState(false);
   const [progresso, setProgresso] = useState<{ atual: number; total: number } | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -145,14 +148,21 @@ export default function DuplicarRotina({
   if (outrasContas.length === 0) return null;
 
   return (
-    <div className="flex flex-col items-end gap-1">
-      <div className="flex items-center gap-2">
+    <div className="flex flex-col items-start gap-1">
+      <div className="flex flex-wrap items-center gap-1.5">
         <select
           value={origemId}
           onChange={(e) => setOrigemId(e.target.value)}
           disabled={carregando}
-          className="rounded-lg border border-slate-300 px-2 py-2 text-sm text-slate-700"
+          className="w-36 truncate rounded-lg border border-slate-300 px-2 py-1 text-xs text-slate-700 disabled:opacity-60"
         >
+          {/* Placeholder neutro: fica selecionado até o usuário escolher de
+              propósito, não leva a lugar nenhum sozinho e não pode ser
+              escolhido de novo depois (disabled) — só existe pra nunca ter
+              uma conta de verdade pré-selecionada aqui. */}
+          <option value="" disabled>
+            Escolha uma conta
+          </option>
           {outrasContas.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}
@@ -162,15 +172,15 @@ export default function DuplicarRotina({
         <button
           type="button"
           onClick={duplicar}
-          disabled={carregando}
-          className="whitespace-nowrap rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:border-brand-400 hover:text-brand-600 disabled:opacity-60"
+          disabled={carregando || !origemId}
+          className="whitespace-nowrap rounded-lg border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:border-brand-400 hover:text-brand-600 disabled:opacity-60"
         >
           {carregando ? "Duplicando…" : "Duplicar rotina de…"}
         </button>
       </div>
 
       {carregando && progresso && (
-        <div className="w-56">
+        <div className="w-48">
           <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200">
             <div
               className="h-full rounded-full bg-brand-500 transition-all"
@@ -179,13 +189,13 @@ export default function DuplicarRotina({
               }}
             />
           </div>
-          <p className="mt-1 text-right text-xs text-slate-500">
+          <p className="mt-1 text-xs text-slate-500">
             Copiando {progresso.atual} de {progresso.total}…
           </p>
         </div>
       )}
 
-      {erro && <p className="max-w-xs text-right text-xs text-red-600">{erro}</p>}
+      {erro && <p className="max-w-xs text-xs text-red-600">{erro}</p>}
     </div>
   );
 }
