@@ -1,7 +1,8 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { agoraEmSaoPaulo } from "@/lib/days";
 import type { Account } from "@/types/database";
 import LogoutButton from "./LogoutButton";
-import ListaContas from "./ListaContas";
+import ListaContas, { type ResumoDoDia } from "./ListaContas";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,34 @@ export default async function ContasPage({
     .order("name", { ascending: true });
 
   const lista = (contas ?? []) as Account[];
+
+  // Resumo do dia por conta (pra mostrar "3 de 10 postados" nos cards).
+  // Só duas consultas no total, independente de quantas contas existirem.
+  const { diaSemanaIso, dataISO } = agoraEmSaoPaulo();
+
+  const { data: slotsHojeData } = await admin
+    .from("schedule_slots")
+    .select("account_id")
+    .eq("day_of_week", diaSemanaIso)
+    .eq("is_active", true);
+
+  const { data: logsHojeData } = await admin
+    .from("publish_log")
+    .select("account_id, status")
+    .eq("scheduled_for", dataISO);
+
+  const resumoHoje: Record<string, ResumoDoDia> = {};
+  for (const conta of lista) {
+    resumoHoje[conta.id] = { total: 0, postados: 0, erros: 0 };
+  }
+  for (const slot of (slotsHojeData ?? []) as { account_id: string }[]) {
+    if (resumoHoje[slot.account_id]) resumoHoje[slot.account_id].total += 1;
+  }
+  for (const log of (logsHojeData ?? []) as { account_id: string | null; status: string }[]) {
+    if (!log.account_id || !resumoHoje[log.account_id]) continue;
+    if (log.status === "success") resumoHoje[log.account_id].postados += 1;
+    if (log.status === "error") resumoHoje[log.account_id].erros += 1;
+  }
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
@@ -36,7 +65,7 @@ export default async function ContasPage({
         </div>
       )}
 
-      <ListaContas initialContas={lista} />
+      <ListaContas initialContas={lista} diaHoje={diaSemanaIso} resumoHoje={resumoHoje} />
 
       {lista.length > 0 && (
         <p className="mt-8 text-xs text-slate-400">
