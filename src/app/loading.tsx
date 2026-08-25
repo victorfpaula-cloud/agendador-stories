@@ -7,16 +7,17 @@
 // conteúdo real.
 export default function Loading() {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-slate-50">
-      <img
-        src="/icon.png"
-        alt="Agendador de Stories"
-        className="h-16 w-16 animate-pulse rounded-xl2 shadow-sm"
-      />
-      <div className="flex gap-1.5">
-        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-brand-500 [animation-delay:-0.3s]" />
-        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-brand-500 [animation-delay:-0.15s]" />
-        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-brand-500" />
+    <div className="flex min-h-screen flex-col items-center justify-center bg-slate-50">
+      <div className="relative flex h-40 w-40 items-center justify-center">
+        {/* Anel girando ao redor do logo — efeito clássico de "carregando",
+            funciona bem mesmo o ícone tendo fundo branco, já que o anel fica
+            por fora dele. */}
+        <div className="absolute inset-0 animate-spin rounded-full border-4 border-brand-100 border-t-brand-500" />
+        <img
+          src="/icon.png"
+          alt="Agendador de Stories"
+          className="h-28 w-28 animate-pop-in rounded-xl2 shadow-md"
+        />
       </div>
     </div>
   );
