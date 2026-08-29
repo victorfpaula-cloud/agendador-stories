@@ -1,14 +1,15 @@
 import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { DriveConfig } from "@/types/database";
+import type { DriveConfig, DriveExecucao } from "@/types/database";
 import DriveConfigClient from "./DriveConfigClient";
 
-// Sub-módulo do Drive (passo 6) — telinha de configuração isolada, numa rota
-// própria (/publicacoes/drive), separada da composição manual de post. Se
-// algo aqui quebrar, não afeta em nada a página de Publicações nem o motor
-// de publicação — só essa telinha fica indisponível. Ainda não roda nada
-// sozinho: é só a configuração (pasta-mãe do Drive, contas-alvo, horário de
-// publicação). O cron diário que lê o Drive de verdade chega no passo 7.
+// Sub-módulo do Drive (passo 6 = configuração, passo 7 = o robô de verdade)
+// — telinha isolada, numa rota própria (/publicacoes/drive), separada da
+// composição manual de post. Se algo aqui quebrar, não afeta em nada a
+// página de Publicações nem o motor de publicação — só essa telinha fica
+// indisponível. O robô roda 1x por dia (ver supabase/drive-cron.sql) e
+// registra o resultado em `drive_execucoes`, mostrado embaixo do
+// formulário pra Victor acompanhar sem precisar olhar log nenhum da Vercel.
 export const dynamic = "force-dynamic";
 
 export default async function DriveConfigPage() {
@@ -22,6 +23,13 @@ export default async function DriveConfigPage() {
 
   const { data: config, error } = await admin.from("drive_config").select("*").eq("id", 1).maybeSingle();
 
+  const { data: ultimaExecucao } = await admin
+    .from("drive_execucoes")
+    .select("*")
+    .order("executado_em", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
       <div className="mb-8">
@@ -30,7 +38,7 @@ export default async function DriveConfigPage() {
         </Link>
         <h1 className="mt-1 text-2xl font-semibold text-slate-900">Automação do Drive</h1>
         <p className="text-sm text-slate-500">
-          Só configuração por enquanto — o robô que lê o Drive todo dia ainda não está ligado.
+          O robô confere a pasta do dia uma vez por dia (às 11h) e cria o post automaticamente.
         </p>
       </div>
 
@@ -40,7 +48,11 @@ export default async function DriveConfigPage() {
         </div>
       )}
 
-      <DriveConfigClient accounts={contas ?? []} initialConfig={(config as DriveConfig) ?? null} />
+      <DriveConfigClient
+        accounts={contas ?? []}
+        initialConfig={(config as DriveConfig) ?? null}
+        ultimaExecucao={(ultimaExecucao as DriveExecucao) ?? null}
+      />
     </main>
   );
 }
