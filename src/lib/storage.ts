@@ -53,6 +53,36 @@ export async function removerMidia(admin: SupabaseClient, path: string) {
   await admin.storage.from(BUCKET).remove([path]);
 }
 
+// ---------- Upload direto (navegador -> Storage, sem passar pelo servidor) ----------
+//
+// Usado pelo módulo de Publicações (feed/Reels/carrossel): em vez do arquivo
+// passar pela função serverless da Vercel (que tem limite de ~4,5MB de corpo
+// de requisição), o navegador sobe direto pro Storage usando uma "signed
+// upload URL" — o servidor só gera esse link (poucos bytes), nunca vê o
+// arquivo em si. Recebe o bucket como parâmetro (diferente de `enviarMidia`
+// acima, que é fixo no bucket "story-media" dos Stories) porque esse
+// mecanismo nasceu pro bucket novo "feed-media" e pode vir a ser usado por
+// outros buckets no futuro.
+export async function criarUploadAssinado(
+  admin: SupabaseClient,
+  bucket: string,
+  accountId: string,
+  fileName: string
+) {
+  const extensao = (fileName.split(".").pop() || "dat").toLowerCase();
+  const path = `${accountId}/${randomUUID()}.${extensao}`;
+
+  const { data, error } = await admin.storage.from(bucket).createSignedUploadUrl(path);
+
+  if (error || !data) {
+    throw new Error(`Falha ao gerar o link de upload: ${error?.message ?? "erro desconhecido"}`);
+  }
+
+  const { data: pub } = admin.storage.from(bucket).getPublicUrl(path);
+
+  return { signedUrl: data.signedUrl, token: data.token, path, publicUrl: pub.publicUrl };
+}
+
 // Usado por "Duplicar rotina": copia de verdade o arquivo de mídia pra uma
 // pasta nova, da conta de destino, em vez de só reaproveitar o mesmo link.
 // Isso é importante — se as duas contas apontassem pro mesmo arquivo, trocar
