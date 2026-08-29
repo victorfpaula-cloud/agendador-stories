@@ -87,3 +87,11 @@ export interface FeedPostAccount {
   published_at: string | null;
   created_at: string;
 }
+
+// Formato "com detalhes" usado na tela: o post já vem com a(s) mídia(s) e a(s)
+// conta(s)-alvo (com o nome da conta) embutidas, pra não precisar de consultas
+// extras pra montar a lista.
+export interface FeedPostComDetalhes extends FeedPost {
+  feed_post_media: FeedPostMedia[];
+  feed_post_accounts: (FeedPostAccount & { accounts: Pick<Account, "id" | "name" | "ig_username"> })[];
+}
