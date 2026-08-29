@@ -16,14 +16,14 @@ function detectarTipoMidiaCliente(contentType: string): MediaType {
 // que pode ser grande, vai direto do navegador pro Storage.
 export async function enviarMidiaDireto(
   file: File,
-  { bucket, accountId }: { bucket: string; accountId: string }
+  { bucket, pasta }: { bucket: string; pasta: string }
 ): Promise<{ url: string; path: string; mediaType: MediaType }> {
   const mediaType = detectarTipoMidiaCliente(file.type || "");
 
   const res = await fetch("/api/uploads/signed-url", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ bucket, accountId, fileName: file.name }),
+    body: JSON.stringify({ bucket, pasta, fileName: file.name }),
   });
 
   const json = await res.json().catch(() => null);
