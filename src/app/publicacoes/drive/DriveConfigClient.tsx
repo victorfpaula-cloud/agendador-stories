@@ -1,7 +1,29 @@
 "use client";
 
 import { useState } from "react";
-import type { DriveConfig } from "@/types/database";
+import type { DriveConfig, DriveExecucao, DriveExecucaoResultado } from "@/types/database";
+
+// Mensagem amigável por resultado — pra Victor entender o que aconteceu na
+// última vez que o robô rodou sem precisar interpretar nada técnico.
+// 'sem_pasta' e 'ja_existe' não são erro (dia sem post, ou post do dia já
+// tinha sido criado antes) — só 'erro' de fato é destacado em vermelho.
+const EXECUCAO_INFO: Record<DriveExecucaoResultado, { texto: string; cor: string }> = {
+  sem_config: { texto: "Configuração incompleta — falta a pasta do Drive e/ou as contas-alvo.", cor: "text-amber-600" },
+  sem_pasta: { texto: "Nenhuma pasta encontrada pra esse dia — sem post hoje, normal.", cor: "text-slate-500" },
+  ja_existe: { texto: "O post de hoje já tinha sido criado antes — nada duplicado.", cor: "text-slate-500" },
+  post_criado: { texto: "Post criado com sucesso a partir do Drive.", cor: "text-green-600" },
+  erro: { texto: "Deu erro ao processar o Drive hoje.", cor: "text-red-600" },
+};
+
+function formatarDataHora(iso: string): string {
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(iso));
+}
 
 // Mesmo padrão de tratamento de erro usado no resto do app.
 async function chamarApi(input: string, init?: RequestInit) {
@@ -40,9 +62,11 @@ type Conta = { id: string; name: string; ig_username: string | null };
 export default function DriveConfigClient({
   accounts,
   initialConfig,
+  ultimaExecucao,
 }: {
   accounts: Conta[];
   initialConfig: DriveConfig | null;
+  ultimaExecucao: DriveExecucao | null;
 }) {
   const [pastaDriveId, setPastaDriveId] = useState(initialConfig?.pasta_drive_id ?? "");
   const [horario, setHorario] = useState(
@@ -168,10 +192,21 @@ export default function DriveConfigClient({
         {erro && <p className="text-xs text-red-600">{erro}</p>}
         {salvoEm && !erro && <p className="text-xs text-green-600">Configuração salva ({salvoEm}).</p>}
 
-        <p className="border-t border-slate-100 pt-3 text-xs text-slate-400">
-          Isso só guarda a configuração. O robô que lê o Drive todo dia sozinho ainda não está
-          ligado — chega no próximo passo. Até lá, essa telinha não afeta nada do que já funciona.
-        </p>
+        <div className="border-t border-slate-100 pt-3">
+          <span className="mb-1 block text-xs font-medium text-slate-500">Última verificação do Drive</span>
+          {ultimaExecucao ? (
+            <p className={`text-xs ${EXECUCAO_INFO[ultimaExecucao.resultado].cor}`}>
+              {formatarDataHora(ultimaExecucao.executado_em)} — {EXECUCAO_INFO[ultimaExecucao.resultado].texto}
+              {ultimaExecucao.resultado === "erro" && ultimaExecucao.detalhe && (
+                <span className="mt-0.5 block text-slate-500">{ultimaExecucao.detalhe}</span>
+              )}
+            </p>
+          ) : (
+            <p className="text-xs text-slate-400">
+              Ainda não rodou nenhuma vez. O robô confere o Drive automaticamente todo dia às 11h.
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );
