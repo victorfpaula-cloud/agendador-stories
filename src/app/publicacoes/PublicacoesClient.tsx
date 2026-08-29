@@ -298,6 +298,11 @@ function CardPost({ post }: { post: FeedPostComDetalhes }) {
         <div className="flex items-center justify-between gap-2">
           <span className="text-sm font-medium text-slate-700">{formatarDataHora(post.scheduled_at)}</span>
           <span className="flex shrink-0 items-center gap-1.5">
+            {post.source === "drive" && (
+              <span className="rounded-full bg-teal-50 px-2 py-0.5 text-[11px] font-medium text-teal-700">
+                Drive
+              </span>
+            )}
             {post.media_type === "REELS" && (
               <span className="rounded-full bg-purple-50 px-2 py-0.5 text-[11px] font-medium text-purple-700">
                 Reels
