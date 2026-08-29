@@ -95,3 +95,15 @@ export interface FeedPostComDetalhes extends FeedPost {
   feed_post_media: FeedPostMedia[];
   feed_post_accounts: (FeedPostAccount & { accounts: Pick<Account, "id" | "name" | "ig_username"> })[];
 }
+
+// Configuração do sub-módulo do Drive (passo 6) — linha única (id sempre 1).
+// Editável pela tela, sem precisar mexer em código quando a pasta ou o
+// horário mudar. account_ids é a lista de contas-alvo do post automático do
+// dia (na prática, só as contas da Dona Baunilha).
+export interface DriveConfig {
+  id: number;
+  pasta_drive_id: string | null;
+  horario_publicacao: string; // "HH:MM:SS"
+  account_ids: string[];
+  updated_at: string;
+}
