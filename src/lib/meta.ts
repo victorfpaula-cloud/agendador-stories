@@ -167,10 +167,9 @@ export async function publicarStory(params: CriarContainerParams): Promise<strin
   return publicarContainer(params.igUserId, containerId, params.pageAccessToken);
 }
 
-// ---------- Publicação no Feed (foto/vídeo avulso e Reels) ----------
-// Carrossel chega num passo futuro do módulo de Publicações; por enquanto
-// isso cobre uma mídia por post (foto, vídeo comum ou Reels), em qualquer
-// conta.
+// ---------- Publicação no Feed (foto avulsa ou Reels) ----------
+// Cobre uma mídia por post (foto ou Reels), em qualquer conta. Carrossel tem
+// suas próprias funções, mais abaixo.
 
 interface CriarContainerFeedParams {
   igUserId: string;
@@ -226,6 +225,84 @@ export async function publicarPostFeed(params: CriarContainerFeedParams): Promis
   await esperarContainerFicarPronto(containerId, params.pageAccessToken, timeoutMs);
 
   return publicarContainer(params.igUserId, containerId, params.pageAccessToken);
+}
+
+// ---------- Publicação de Carrossel (2 a 10 itens, foto e/ou vídeo) ----------
+// Padrão de 3 etapas exigido pelo Instagram: um container por item (marcado
+// como is_carousel_item, cada um precisa terminar de processar sozinho),
+// depois um container "pai" (media_type=CAROUSEL) referenciando os ids dos
+// itens, só então publicar o pai.
+
+interface CriarItemCarrosselParams {
+  igUserId: string;
+  pageAccessToken: string;
+  mediaUrl: string;
+  mediaType: "IMAGE" | "VIDEO";
+}
+
+async function criarContainerDeItemCarrossel({
+  igUserId,
+  pageAccessToken,
+  mediaUrl,
+  mediaType,
+}: CriarItemCarrosselParams): Promise<string> {
+  const params: Record<string, string> = {
+    access_token: pageAccessToken,
+    is_carousel_item: "true",
+  };
+
+  if (mediaType === "VIDEO") {
+    params.media_type = "VIDEO";
+    params.video_url = mediaUrl;
+  } else {
+    params.image_url = mediaUrl;
+  }
+
+  const json = await graphFetch(`/${igUserId}/media`, params, "POST");
+  return json.id as string;
+}
+
+interface PublicarCarrosselParams {
+  igUserId: string;
+  pageAccessToken: string;
+  itens: { mediaUrl: string; mediaType: "IMAGE" | "VIDEO" }[];
+  caption?: string;
+}
+
+export async function publicarPostCarrossel({
+  igUserId,
+  pageAccessToken,
+  itens,
+  caption,
+}: PublicarCarrosselParams): Promise<string> {
+  // Cria um container por item e espera CADA UM ficar pronto antes de seguir
+  // pro próximo — o Instagram exige que todo item já esteja processado antes
+  // de aceitar o container "pai" do carrossel que os referencia.
+  const childrenIds: string[] = [];
+  for (const item of itens) {
+    const itemId = await criarContainerDeItemCarrossel({
+      igUserId,
+      pageAccessToken,
+      mediaUrl: item.mediaUrl,
+      mediaType: item.mediaType,
+    });
+    const timeoutMs = item.mediaType === "VIDEO" ? 120_000 : 60_000;
+    await esperarContainerFicarPronto(itemId, pageAccessToken, timeoutMs);
+    childrenIds.push(itemId);
+  }
+
+  const params: Record<string, string> = {
+    media_type: "CAROUSEL",
+    children: childrenIds.join(","),
+    access_token: pageAccessToken,
+  };
+  if (caption) params.caption = caption;
+
+  const json = await graphFetch(`/${igUserId}/media`, params, "POST");
+  const containerId = json.id as string;
+
+  await esperarContainerFicarPronto(containerId, pageAccessToken);
+  return publicarContainer(igUserId, containerId, pageAccessToken);
 }
 
 export { MetaApiError };
