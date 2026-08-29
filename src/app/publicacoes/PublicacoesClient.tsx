@@ -97,12 +97,28 @@ function ComporPost({
   const [caption, setCaption] = useState("");
   const [accountIds, setAccountIds] = useState<string[]>([]);
   const [dataHora, setDataHora] = useState("");
+  const [ehReels, setEhReels] = useState(false);
+  const [shareToFeed, setShareToFeed] = useState(true);
+  const [capa, setCapa] = useState<File | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [progresso, setProgresso] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
 
+  const arquivoEhVideo = file ? file.type.startsWith("video/") : false;
+
   function alternarConta(id: string) {
     setAccountIds((atual) => (atual.includes(id) ? atual.filter((x) => x !== id) : [...atual, id]));
+  }
+
+  function aoEscolherArquivo(novoArquivo: File | null) {
+    setFile(novoArquivo);
+    // Reels só existe pra vídeo — se trocar pra uma foto (ou remover o
+    // arquivo), some com as opções de Reels pra não mandar um estado
+    // inconsistente no agendamento.
+    if (!novoArquivo || !novoArquivo.type.startsWith("video/")) {
+      setEhReels(false);
+      setCapa(null);
+    }
   }
 
   async function publicar() {
@@ -131,6 +147,12 @@ function ComporPost({
       setProgresso("Enviando mídia…");
       const midia = await enviarMidiaDireto(file, { bucket: BUCKET, pasta: "manual" });
 
+      let capaEnviada: { url: string; path: string; mediaType: string } | null = null;
+      if (ehReels && capa) {
+        setProgresso("Enviando capa…");
+        capaEnviada = await enviarMidiaDireto(capa, { bucket: BUCKET, pasta: "manual" });
+      }
+
       setProgresso("Agendando…");
       const json = await chamarApi("/api/feed-posts", {
         method: "POST",
@@ -140,6 +162,9 @@ function ComporPost({
           scheduledAt: scheduledAt.toISOString(),
           accountIds,
           media: midia,
+          ehReels,
+          shareToFeed: ehReels ? shareToFeed : undefined,
+          capa: capaEnviada,
         }),
       });
 
@@ -148,6 +173,9 @@ function ComporPost({
       setCaption("");
       setAccountIds([]);
       setDataHora("");
+      setEhReels(false);
+      setShareToFeed(true);
+      setCapa(null);
     } catch (err) {
       setErro(err instanceof Error ? err.message : "Erro ao agendar a publicação.");
     } finally {
@@ -167,11 +195,58 @@ function ComporPost({
             type="file"
             accept="image/*,video/*"
             disabled={enviando}
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            onChange={(e) => aoEscolherArquivo(e.target.files?.[0] ?? null)}
             className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-brand-50 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-brand-700 hover:file:bg-brand-100"
           />
           {file && <span className="mt-1 block truncate text-xs text-slate-400">{file.name}</span>}
         </label>
+
+        {arquivoEhVideo && (
+          <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+            <label className="flex cursor-pointer items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={ehReels}
+                onChange={(e) => setEhReels(e.target.checked)}
+                disabled={enviando}
+                className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+              />
+              <span className="font-medium text-slate-700">Publicar como Reels</span>
+            </label>
+
+            {ehReels && (
+              <div className="mt-3 space-y-3 pl-6">
+                <label className="flex cursor-pointer items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={shareToFeed}
+                    onChange={(e) => setShareToFeed(e.target.checked)}
+                    disabled={enviando}
+                    className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                  />
+                  <span className="text-slate-600">Compartilhar também no feed</span>
+                </label>
+
+                <label className="block">
+                  <span className="mb-1 block text-xs font-medium text-slate-500">Capa do vídeo (opcional)</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    disabled={enviando}
+                    onChange={(e) => setCapa(e.target.files?.[0] ?? null)}
+                    className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-brand-50 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-brand-700 hover:file:bg-brand-100"
+                  />
+                  {capa && <span className="mt-1 block truncate text-xs text-slate-400">{capa.name}</span>}
+                  {!capa && (
+                    <span className="mt-1 block text-xs text-slate-400">
+                      Sem capa, o Instagram escolhe um frame do vídeo automaticamente.
+                    </span>
+                  )}
+                </label>
+              </div>
+            )}
+          </div>
+        )}
 
         <label className="block">
           <span className="mb-1 block text-xs font-medium text-slate-500">Legenda</span>
@@ -259,8 +334,13 @@ function CardPost({ post }: { post: FeedPostComDetalhes }) {
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
           <span className="text-sm font-medium text-slate-700">{formatarDataHora(post.scheduled_at)}</span>
-          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${status.cor}`}>
-            {status.texto}
+          <span className="flex shrink-0 items-center gap-1.5">
+            {post.media_type === "REELS" && (
+              <span className="rounded-full bg-purple-50 px-2 py-0.5 text-[11px] font-medium text-purple-700">
+                Reels
+              </span>
+            )}
+            <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${status.cor}`}>{status.texto}</span>
           </span>
         </div>
         <p className="truncate text-xs text-slate-500">
