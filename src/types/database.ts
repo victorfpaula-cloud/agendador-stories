@@ -107,3 +107,18 @@ export interface DriveConfig {
   account_ids: string[];
   updated_at: string;
 }
+
+// Um registro do que aconteceu na última vez (ou nas últimas vezes) que o
+// cron diário do Drive rodou (passo 7) — pra Victor conseguir ver o
+// resultado direto na telinha de configuração, sem precisar olhar log
+// nenhum da Vercel.
+export type DriveExecucaoResultado = "sem_config" | "sem_pasta" | "ja_existe" | "post_criado" | "erro";
+
+export interface DriveExecucao {
+  id: string;
+  executado_em: string;
+  resultado: DriveExecucaoResultado;
+  detalhe: string | null;
+  feed_post_id: string | null;
+  created_at: string;
+}
