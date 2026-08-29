@@ -36,6 +36,12 @@ export default async function PublicacoesPage() {
             Feed, Reels e carrossel — agendamento avulso, separado da rotina semanal de Stories.
           </p>
         </div>
+        <Link
+          href="/publicacoes/drive"
+          className="shrink-0 rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200"
+        >
+          Automação do Drive
+        </Link>
       </div>
 
       {error && (
