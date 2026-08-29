@@ -47,6 +47,15 @@ function formatarDataHora(iso: string): string {
   }).format(new Date(iso));
 }
 
+// Mesma regra usada no servidor (/api/feed-posts) pra decidir o tipo do
+// post só pela quantidade/tipo de arquivo — mostrado aqui só como
+// informação pro usuário, quem decide de verdade é o servidor.
+function tipoDetectado(files: File[]): string | null {
+  if (files.length === 0) return null;
+  if (files.length === 1) return files[0].type.startsWith("video/") ? "Reels" : "Post no feed";
+  return `Carrossel (${files.length} itens)`;
+}
+
 type Conta = { id: string; name: string; ig_username: string | null };
 
 export default function PublicacoesClient({
@@ -93,39 +102,29 @@ function ComporPost({
   accounts: Conta[];
   onCriado: (post: FeedPostComDetalhes) => void;
 }) {
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [caption, setCaption] = useState("");
   const [accountIds, setAccountIds] = useState<string[]>([]);
   const [dataHora, setDataHora] = useState("");
-  const [ehReels, setEhReels] = useState(false);
-  const [shareToFeed, setShareToFeed] = useState(true);
-  const [capa, setCapa] = useState<File | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [progresso, setProgresso] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
 
-  const arquivoEhVideo = file ? file.type.startsWith("video/") : false;
+  const tipo = tipoDetectado(files);
 
   function alternarConta(id: string) {
     setAccountIds((atual) => (atual.includes(id) ? atual.filter((x) => x !== id) : [...atual, id]));
   }
 
-  function aoEscolherArquivo(novoArquivo: File | null) {
-    setFile(novoArquivo);
-    // Reels só existe pra vídeo — se trocar pra uma foto (ou remover o
-    // arquivo), some com as opções de Reels pra não mandar um estado
-    // inconsistente no agendamento.
-    if (!novoArquivo || !novoArquivo.type.startsWith("video/")) {
-      setEhReels(false);
-      setCapa(null);
-    }
-  }
-
   async function publicar() {
     setErro(null);
 
-    if (!file) {
-      setErro("Escolha uma foto ou vídeo.");
+    if (files.length === 0) {
+      setErro("Escolha ao menos uma foto ou vídeo.");
+      return;
+    }
+    if (files.length > 10) {
+      setErro("Carrossel aceita no máximo 10 arquivos.");
       return;
     }
     if (accountIds.length === 0) {
@@ -144,13 +143,13 @@ function ComporPost({
 
     setEnviando(true);
     try {
-      setProgresso("Enviando mídia…");
-      const midia = await enviarMidiaDireto(file, { bucket: BUCKET, pasta: "manual" });
-
-      let capaEnviada: { url: string; path: string; mediaType: string } | null = null;
-      if (ehReels && capa) {
-        setProgresso("Enviando capa…");
-        capaEnviada = await enviarMidiaDireto(capa, { bucket: BUCKET, pasta: "manual" });
+      // Um upload de cada vez, na ordem em que os arquivos foram escolhidos
+      // — o servidor usa essa mesma ordem como ordem do carrossel.
+      const midias: { url: string; path: string; mediaType: string }[] = [];
+      for (let i = 0; i < files.length; i++) {
+        setProgresso(files.length > 1 ? `Enviando arquivo ${i + 1} de ${files.length}…` : "Enviando mídia…");
+        const midia = await enviarMidiaDireto(files[i], { bucket: BUCKET, pasta: "manual" });
+        midias.push(midia);
       }
 
       setProgresso("Agendando…");
@@ -161,21 +160,15 @@ function ComporPost({
           caption,
           scheduledAt: scheduledAt.toISOString(),
           accountIds,
-          media: midia,
-          ehReels,
-          shareToFeed: ehReels ? shareToFeed : undefined,
-          capa: capaEnviada,
+          media: midias,
         }),
       });
 
       onCriado(json.post);
-      setFile(null);
+      setFiles([]);
       setCaption("");
       setAccountIds([]);
       setDataHora("");
-      setEhReels(false);
-      setShareToFeed(true);
-      setCapa(null);
     } catch (err) {
       setErro(err instanceof Error ? err.message : "Erro ao agendar a publicação.");
     } finally {
@@ -190,63 +183,32 @@ function ComporPost({
 
       <div className="space-y-3">
         <label className="block">
-          <span className="mb-1 block text-xs font-medium text-slate-500">Foto ou vídeo</span>
+          <span className="mb-1 block text-xs font-medium text-slate-500">Foto(s) ou vídeo</span>
           <input
             type="file"
             accept="image/*,video/*"
+            multiple
             disabled={enviando}
-            onChange={(e) => aoEscolherArquivo(e.target.files?.[0] ?? null)}
+            onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
             className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-brand-50 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-brand-700 hover:file:bg-brand-100"
           />
-          {file && <span className="mt-1 block truncate text-xs text-slate-400">{file.name}</span>}
+          {/* Sem nada pra marcar: 1 vídeo vira Reels, 1 foto vira post no
+              feed, 2 ou mais arquivos viram carrossel — automático. */}
+          {files.length > 0 && (
+            <div className="mt-1.5 space-y-0.5">
+              {files.map((f, i) => (
+                <span key={i} className="block truncate text-xs text-slate-400">
+                  {f.name}
+                </span>
+              ))}
+              {tipo && (
+                <span className="mt-1 inline-block rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-medium text-brand-700">
+                  {tipo}
+                </span>
+              )}
+            </div>
+          )}
         </label>
-
-        {arquivoEhVideo && (
-          <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-            <label className="flex cursor-pointer items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={ehReels}
-                onChange={(e) => setEhReels(e.target.checked)}
-                disabled={enviando}
-                className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
-              />
-              <span className="font-medium text-slate-700">Publicar como Reels</span>
-            </label>
-
-            {ehReels && (
-              <div className="mt-3 space-y-3 pl-6">
-                <label className="flex cursor-pointer items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={shareToFeed}
-                    onChange={(e) => setShareToFeed(e.target.checked)}
-                    disabled={enviando}
-                    className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
-                  />
-                  <span className="text-slate-600">Compartilhar também no feed</span>
-                </label>
-
-                <label className="block">
-                  <span className="mb-1 block text-xs font-medium text-slate-500">Capa do vídeo (opcional)</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    disabled={enviando}
-                    onChange={(e) => setCapa(e.target.files?.[0] ?? null)}
-                    className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-brand-50 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-brand-700 hover:file:bg-brand-100"
-                  />
-                  {capa && <span className="mt-1 block truncate text-xs text-slate-400">{capa.name}</span>}
-                  {!capa && (
-                    <span className="mt-1 block text-xs text-slate-400">
-                      Sem capa, o Instagram escolhe um frame do vídeo automaticamente.
-                    </span>
-                  )}
-                </label>
-              </div>
-            )}
-          </div>
-        )}
 
         <label className="block">
           <span className="mb-1 block text-xs font-medium text-slate-500">Legenda</span>
@@ -323,7 +285,8 @@ const STATUS_INFO: Record<FeedPostStatus, { cor: string; texto: string }> = {
 };
 
 function CardPost({ post }: { post: FeedPostComDetalhes }) {
-  const midia = [...(post.feed_post_media ?? [])].sort((a, b) => a.position - b.position)[0];
+  const midias = [...(post.feed_post_media ?? [])].sort((a, b) => a.position - b.position);
+  const midia = midias[0];
   const contas = post.feed_post_accounts ?? [];
   const status = STATUS_INFO[post.status];
 
@@ -338,6 +301,11 @@ function CardPost({ post }: { post: FeedPostComDetalhes }) {
             {post.media_type === "REELS" && (
               <span className="rounded-full bg-purple-50 px-2 py-0.5 text-[11px] font-medium text-purple-700">
                 Reels
+              </span>
+            )}
+            {post.media_type === "CAROUSEL" && (
+              <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700">
+                Carrossel · {midias.length} itens
               </span>
             )}
             <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${status.cor}`}>{status.texto}</span>
