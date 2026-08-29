@@ -8,6 +8,9 @@ import type { Account, FeedPostAccount, FeedPostMedia } from "@/types/database";
 // risco de uma mexer na outra. Roda a cada 5 min (mesma cadência dos
 // Stories), num agendamento próprio no Supabase Cron — ver
 // supabase/cron-feed.sql.
+//
+// Passo 4: Reels já é suportado (media_type="REELS" em feed_posts, com
+// share_to_feed e capa opcional). Só Carrossel segue pendente.
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
@@ -68,12 +71,17 @@ async function executar(req: NextRequest) {
       continue;
     }
 
-    if (post.media_type === "CAROUSEL" || post.media_type === "REELS") {
+    if (post.media_type === "CAROUSEL") {
       const msg = `Publicação do tipo ${post.media_type} ainda não é suportada (chega em um próximo passo).`;
       await admin.from("feed_posts").update({ status: "error", error_message: msg }).eq("id", post.id);
       resultados.push({ postId: post.id, status: "error", detalhe: msg });
       continue;
     }
+
+    // Reels usa uma segunda mídia opcional (position 1) como capa do vídeo —
+    // ver passo 4. Se não foi enviada, publica sem capa customizada (o
+    // Instagram escolhe um frame do vídeo sozinho).
+    const capaReels = midias.find((m) => m.position === 1);
 
     let algumSucesso = false;
     let algumErro = false;
@@ -95,8 +103,10 @@ async function executar(req: NextRequest) {
           igUserId: conta.ig_user_id,
           pageAccessToken: conta.page_access_token,
           mediaUrl: midiaPrincipal.media_url,
-          mediaType: midiaPrincipal.media_type,
+          mediaType: post.media_type === "REELS" ? "REELS" : midiaPrincipal.media_type,
           caption: post.caption,
+          shareToFeed: post.media_type === "REELS" ? post.share_to_feed : undefined,
+          coverUrl: post.media_type === "REELS" ? capaReels?.media_url : undefined,
         });
 
         await admin
