@@ -53,6 +53,41 @@ export async function removerMidia(admin: SupabaseClient, path: string) {
   await admin.storage.from(BUCKET).remove([path]);
 }
 
+// Usado pelo sub-módulo do Drive (passo 7): o servidor já baixou o arquivo
+// do Google Drive (Buffer em memória, dentro do próprio cron) e precisa
+// subir pro Storage do Supabase pra virar uma URL pública (que é o que a
+// API do Instagram exige). Diferente do upload direto (`criarUploadAssinado`,
+// usado pelo navegador do Victor), aqui não existe o limite de ~4,5MB de
+// corpo de requisição da Vercel envolvido — esse limite é só pra
+// requisições que chegam de fora; código rodando no próprio servidor,
+// enviando um Buffer direto pro Storage, não passa por essa camada.
+export async function enviarMidiaBuffer(
+  admin: SupabaseClient,
+  bucket: string,
+  pasta: string,
+  buffer: Buffer,
+  mimeType: string,
+  nomeArquivoOriginal: string
+) {
+  const extensao = (
+    nomeArquivoOriginal.split(".").pop() || (mimeType.startsWith("video/") ? "mp4" : "jpg")
+  ).toLowerCase();
+  const path = `${pasta}/${randomUUID()}.${extensao}`;
+
+  const { error } = await admin.storage.from(bucket).upload(path, buffer, {
+    contentType: mimeType || undefined,
+    upsert: false,
+  });
+
+  if (error) {
+    throw new Error(`Falha ao enviar o arquivo pro Storage: ${error.message}`);
+  }
+
+  const { data: pub } = admin.storage.from(bucket).getPublicUrl(path);
+
+  return { url: pub.publicUrl, path };
+}
+
 // ---------- Upload direto (navegador -> Storage, sem passar pelo servidor) ----------
 //
 // Usado pelo módulo de Publicações (feed/Reels/carrossel): em vez do arquivo
