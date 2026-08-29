@@ -167,16 +167,20 @@ export async function publicarStory(params: CriarContainerParams): Promise<strin
   return publicarContainer(params.igUserId, containerId, params.pageAccessToken);
 }
 
-// ---------- Publicação no Feed (foto/vídeo avulso) ----------
-// Carrossel e Reels chegam em passos futuros do módulo de Publicações; por
-// enquanto isso cobre só uma mídia por post, em qualquer conta.
+// ---------- Publicação no Feed (foto/vídeo avulso e Reels) ----------
+// Carrossel chega num passo futuro do módulo de Publicações; por enquanto
+// isso cobre uma mídia por post (foto, vídeo comum ou Reels), em qualquer
+// conta.
 
 interface CriarContainerFeedParams {
   igUserId: string;
   pageAccessToken: string;
   mediaUrl: string;
-  mediaType: "IMAGE" | "VIDEO";
+  mediaType: "IMAGE" | "VIDEO" | "REELS";
   caption?: string;
+  // Só fazem sentido pra mediaType === "REELS":
+  shareToFeed?: boolean; // se também aparece na grade do feed, além da aba Reels
+  coverUrl?: string; // capa customizada (opcional — sem isso o Instagram escolhe um frame do vídeo)
 }
 
 export async function criarContainerDeFeed({
@@ -185,12 +189,19 @@ export async function criarContainerDeFeed({
   mediaUrl,
   mediaType,
   caption,
+  shareToFeed,
+  coverUrl,
 }: CriarContainerFeedParams): Promise<string> {
   const params: Record<string, string> = {
     access_token: pageAccessToken,
   };
 
-  if (mediaType === "VIDEO") {
+  if (mediaType === "REELS") {
+    params.media_type = "REELS";
+    params.video_url = mediaUrl;
+    params.share_to_feed = shareToFeed ? "true" : "false";
+    if (coverUrl) params.cover_url = coverUrl;
+  } else if (mediaType === "VIDEO") {
     // Sem media_type=STORIES nem =REELS, um vídeo com video_url vira um post
     // de vídeo comum no feed.
     params.media_type = "VIDEO";
@@ -207,7 +218,13 @@ export async function criarContainerDeFeed({
 
 export async function publicarPostFeed(params: CriarContainerFeedParams): Promise<string> {
   const containerId = await criarContainerDeFeed(params);
-  await esperarContainerFicarPronto(containerId, params.pageAccessToken);
+
+  // Reels costuma ser um vídeo maior/mais longo que Story ou vídeo de feed
+  // comum — o processamento do Meta demora mais, então dá um tempo maior
+  // antes de desistir (o padrão de 60s às vezes não é suficiente).
+  const timeoutMs = params.mediaType === "REELS" ? 180_000 : 60_000;
+  await esperarContainerFicarPronto(containerId, params.pageAccessToken, timeoutMs);
+
   return publicarContainer(params.igUserId, containerId, params.pageAccessToken);
 }
 
