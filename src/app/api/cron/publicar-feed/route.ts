@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { publicarPostFeed, MetaApiError } from "@/lib/meta";
+import { publicarPostFeed, publicarPostCarrossel, MetaApiError } from "@/lib/meta";
 import type { Account, FeedPostAccount, FeedPostMedia } from "@/types/database";
 
 // Motor de publicação do módulo de Publicações (feed/Reels/carrossel) — rota
@@ -9,8 +9,8 @@ import type { Account, FeedPostAccount, FeedPostMedia } from "@/types/database";
 // Stories), num agendamento próprio no Supabase Cron — ver
 // supabase/cron-feed.sql.
 //
-// Passo 4: Reels já é suportado (media_type="REELS" em feed_posts, com
-// share_to_feed e capa opcional). Só Carrossel segue pendente.
+// Passo 5: Carrossel também é suportado agora — os 3 tipos do fluxo manual
+// (foto avulsa, Reels, carrossel) já publicam de verdade.
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
@@ -58,11 +58,12 @@ async function executar(req: NextRequest) {
 
     if (!reivindicado || reivindicado.length === 0) continue;
 
-    const midias = (post.feed_post_media ?? []) as FeedPostMedia[];
+    // Sempre em ordem de position — pro carrossel isso é a ordem dos itens;
+    // pra foto/Reels avulso é só a mídia única, na position 0.
+    const midias = [...((post.feed_post_media ?? []) as FeedPostMedia[])].sort((a, b) => a.position - b.position);
     const contasAlvo = (post.feed_post_accounts ?? []) as (FeedPostAccount & { accounts: Account })[];
-    const midiaPrincipal = [...midias].sort((a, b) => a.position - b.position)[0];
 
-    if (!midiaPrincipal) {
+    if (midias.length === 0) {
       await admin
         .from("feed_posts")
         .update({ status: "error", error_message: "Publicação sem nenhuma mídia associada." })
@@ -70,18 +71,6 @@ async function executar(req: NextRequest) {
       resultados.push({ postId: post.id, status: "error", detalhe: "sem mídia" });
       continue;
     }
-
-    if (post.media_type === "CAROUSEL") {
-      const msg = `Publicação do tipo ${post.media_type} ainda não é suportada (chega em um próximo passo).`;
-      await admin.from("feed_posts").update({ status: "error", error_message: msg }).eq("id", post.id);
-      resultados.push({ postId: post.id, status: "error", detalhe: msg });
-      continue;
-    }
-
-    // Reels usa uma segunda mídia opcional (position 1) como capa do vídeo —
-    // ver passo 4. Se não foi enviada, publica sem capa customizada (o
-    // Instagram escolhe um frame do vídeo sozinho).
-    const capaReels = midias.find((m) => m.position === 1);
 
     let algumSucesso = false;
     let algumErro = false;
@@ -99,15 +88,22 @@ async function executar(req: NextRequest) {
       }
 
       try {
-        const igMediaId = await publicarPostFeed({
-          igUserId: conta.ig_user_id,
-          pageAccessToken: conta.page_access_token,
-          mediaUrl: midiaPrincipal.media_url,
-          mediaType: post.media_type === "REELS" ? "REELS" : midiaPrincipal.media_type,
-          caption: post.caption,
-          shareToFeed: post.media_type === "REELS" ? post.share_to_feed : undefined,
-          coverUrl: post.media_type === "REELS" ? capaReels?.media_url : undefined,
-        });
+        const igMediaId =
+          post.media_type === "CAROUSEL"
+            ? await publicarPostCarrossel({
+                igUserId: conta.ig_user_id,
+                pageAccessToken: conta.page_access_token,
+                itens: midias.map((m) => ({ mediaUrl: m.media_url, mediaType: m.media_type })),
+                caption: post.caption,
+              })
+            : await publicarPostFeed({
+                igUserId: conta.ig_user_id,
+                pageAccessToken: conta.page_access_token,
+                mediaUrl: midias[0].media_url,
+                mediaType: post.media_type === "REELS" ? "REELS" : midias[0].media_type,
+                caption: post.caption,
+                shareToFeed: post.media_type === "REELS" ? post.share_to_feed : undefined,
+              });
 
         await admin
           .from("feed_post_accounts")
@@ -131,9 +127,6 @@ async function executar(req: NextRequest) {
     }
 
     // Status final do post: só "success" se TODAS as contas-alvo publicaram.
-    // Com o fluxo manual de hoje (1 conta só) isso na prática é sempre
-    // sucesso-total ou erro-total; quando o broadcast pra várias contas
-    // chegar, vale revisar se "parcial" merece um status próprio.
     const statusFinal = algumErro ? "error" : "success";
     await admin
       .from("feed_posts")
