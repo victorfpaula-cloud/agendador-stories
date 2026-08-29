@@ -98,6 +98,26 @@ export default function ListaContas({
 
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <Link
+        href="/publicacoes"
+        className="group flex items-center gap-3 rounded-xl2 bg-white p-4 shadow-sm ring-1 ring-slate-200 transition hover:ring-brand-300 sm:col-span-2"
+      >
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-600 group-hover:bg-brand-100">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+            <rect x="3" y="4" width="18" height="16" rx="2.5" />
+            <circle cx="8.5" cy="9.5" r="1.5" />
+            <path d="M21 15l-5.5-5.5a1.5 1.5 0 0 0-2.1 0L3 20" />
+          </svg>
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="font-medium text-slate-900 group-hover:text-brand-700">Publicações</p>
+          <p className="text-sm text-slate-500">Feed, Reels e carrossel — agendamento avulso</p>
+        </div>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 shrink-0 text-slate-300 group-hover:text-brand-400">
+          <path d="M9 6l6 6-6 6" />
+        </svg>
+      </Link>
+
       {contas.map((conta) => (
         <ContaCard
           key={conta.id}
