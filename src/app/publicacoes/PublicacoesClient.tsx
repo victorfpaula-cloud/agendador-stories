@@ -95,11 +95,15 @@ function ComporPost({
 }) {
   const [file, setFile] = useState<File | null>(null);
   const [caption, setCaption] = useState("");
-  const [accountId, setAccountId] = useState("");
+  const [accountIds, setAccountIds] = useState<string[]>([]);
   const [dataHora, setDataHora] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [progresso, setProgresso] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+
+  function alternarConta(id: string) {
+    setAccountIds((atual) => (atual.includes(id) ? atual.filter((x) => x !== id) : [...atual, id]));
+  }
 
   async function publicar() {
     setErro(null);
@@ -108,8 +112,8 @@ function ComporPost({
       setErro("Escolha uma foto ou vídeo.");
       return;
     }
-    if (!accountId) {
-      setErro("Escolha a conta de destino.");
+    if (accountIds.length === 0) {
+      setErro("Escolha ao menos uma conta de destino.");
       return;
     }
     if (!dataHora) {
@@ -125,7 +129,7 @@ function ComporPost({
     setEnviando(true);
     try {
       setProgresso("Enviando mídia…");
-      const midia = await enviarMidiaDireto(file, { bucket: BUCKET, accountId });
+      const midia = await enviarMidiaDireto(file, { bucket: BUCKET, pasta: "manual" });
 
       setProgresso("Agendando…");
       const json = await chamarApi("/api/feed-posts", {
@@ -134,7 +138,7 @@ function ComporPost({
         body: JSON.stringify({
           caption,
           scheduledAt: scheduledAt.toISOString(),
-          accountId,
+          accountIds,
           media: midia,
         }),
       });
@@ -142,7 +146,7 @@ function ComporPost({
       onCriado(json.post);
       setFile(null);
       setCaption("");
-      setAccountId("");
+      setAccountIds([]);
       setDataHora("");
     } catch (err) {
       setErro(err instanceof Error ? err.message : "Erro ao agendar a publicação.");
@@ -181,36 +185,45 @@ function ComporPost({
           />
         </label>
 
-        <div className="flex flex-col gap-3 sm:flex-row">
-          <label className="block flex-1">
-            <span className="mb-1 block text-xs font-medium text-slate-500">Conta</span>
-            <select
-              value={accountId}
-              onChange={(e) => setAccountId(e.target.value)}
-              disabled={enviando}
-              className="w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-sm"
-            >
-              <option value="">Escolha a conta</option>
-              {accounts.map((conta) => (
-                <option key={conta.id} value={conta.id}>
+        <div>
+          <span className="mb-1 block text-xs font-medium text-slate-500">
+            Contas ({accountIds.length === 0 ? "nenhuma selecionada" : `${accountIds.length} selecionada(s)`})
+          </span>
+          <div className="max-h-40 space-y-0.5 overflow-y-auto rounded-md border border-slate-300 p-1.5">
+            {accounts.length === 0 && (
+              <p className="px-1.5 py-1 text-xs text-slate-400">Nenhuma conta ativa disponível.</p>
+            )}
+            {accounts.map((conta) => (
+              <label
+                key={conta.id}
+                className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1.5 text-sm hover:bg-slate-50"
+              >
+                <input
+                  type="checkbox"
+                  checked={accountIds.includes(conta.id)}
+                  onChange={() => alternarConta(conta.id)}
+                  disabled={enviando}
+                  className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                />
+                <span className="text-slate-700">
                   {conta.name}
                   {conta.ig_username ? ` (@${conta.ig_username})` : ""}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="block flex-1">
-            <span className="mb-1 block text-xs font-medium text-slate-500">Data e horário</span>
-            <input
-              type="datetime-local"
-              value={dataHora}
-              onChange={(e) => setDataHora(e.target.value)}
-              disabled={enviando}
-              className="w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-sm"
-            />
-          </label>
+                </span>
+              </label>
+            ))}
+          </div>
         </div>
+
+        <label className="block">
+          <span className="mb-1 block text-xs font-medium text-slate-500">Data e horário</span>
+          <input
+            type="datetime-local"
+            value={dataHora}
+            onChange={(e) => setDataHora(e.target.value)}
+            disabled={enviando}
+            className="w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-sm sm:w-1/2"
+          />
+        </label>
 
         <button
           type="button"
