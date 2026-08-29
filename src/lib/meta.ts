@@ -167,4 +167,48 @@ export async function publicarStory(params: CriarContainerParams): Promise<strin
   return publicarContainer(params.igUserId, containerId, params.pageAccessToken);
 }
 
+// ---------- Publicação no Feed (foto/vídeo avulso) ----------
+// Carrossel e Reels chegam em passos futuros do módulo de Publicações; por
+// enquanto isso cobre só uma mídia por post, em qualquer conta.
+
+interface CriarContainerFeedParams {
+  igUserId: string;
+  pageAccessToken: string;
+  mediaUrl: string;
+  mediaType: "IMAGE" | "VIDEO";
+  caption?: string;
+}
+
+export async function criarContainerDeFeed({
+  igUserId,
+  pageAccessToken,
+  mediaUrl,
+  mediaType,
+  caption,
+}: CriarContainerFeedParams): Promise<string> {
+  const params: Record<string, string> = {
+    access_token: pageAccessToken,
+  };
+
+  if (mediaType === "VIDEO") {
+    // Sem media_type=STORIES nem =REELS, um vídeo com video_url vira um post
+    // de vídeo comum no feed.
+    params.media_type = "VIDEO";
+    params.video_url = mediaUrl;
+  } else {
+    params.image_url = mediaUrl;
+  }
+
+  if (caption) params.caption = caption;
+
+  const json = await graphFetch(`/${igUserId}/media`, params, "POST");
+  return json.id as string;
+}
+
+export async function publicarPostFeed(params: CriarContainerFeedParams): Promise<string> {
+  const containerId = await criarContainerDeFeed(params);
+  await esperarContainerFicarPronto(containerId, params.pageAccessToken);
+  return publicarContainer(params.igUserId, containerId, params.pageAccessToken);
+}
+
 export { MetaApiError };
