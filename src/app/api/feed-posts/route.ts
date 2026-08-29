@@ -5,10 +5,10 @@ import type { FeedMediaType, MediaType } from "@/types/database";
 // Cria uma publicação agendada (feed/Reels/carrossel). Cobre broadcast pra
 // várias contas de uma vez desde o passo 3: mesma mídia + mesma legenda,
 // publicadas em cada conta escolhida, com status individual por conta.
-// Desde o passo 4, também aceita marcar a publicação como Reels — com
-// "compartilhar no feed" (share_to_feed) e capa opcional (segunda mídia,
-// position 1). Carrossel ainda não tem formulário próprio — chega no
-// próximo passo, mas o desenho da tabela já suporta.
+// Desde o passo 5, o TIPO do post é decidido automaticamente pela
+// quantidade/tipo de arquivo enviado — sem precisar marcar nada na tela:
+// 1 vídeo = Reels, 1 foto = post normal no feed, 2 ou mais arquivos =
+// carrossel (pode misturar foto e vídeo).
 export async function POST(req: NextRequest) {
   const admin = createAdminClient();
   const body = await req.json().catch(() => null);
@@ -18,10 +18,9 @@ export async function POST(req: NextRequest) {
   const accountIds: string[] = Array.isArray(body?.accountIds)
     ? body.accountIds.filter((x: unknown) => typeof x === "string" && x)
     : [];
-  const media = body?.media as { url?: string; path?: string; mediaType?: MediaType } | undefined;
-  const ehReels = Boolean(body?.ehReels);
-  const shareToFeed = body?.shareToFeed !== false; // padrão: compartilha no feed também
-  const capa = body?.capa as { url?: string; path?: string; mediaType?: MediaType } | null | undefined;
+  const mediaItems: { url?: string; path?: string; mediaType?: MediaType }[] = Array.isArray(body?.media)
+    ? body.media
+    : [];
 
   if (accountIds.length === 0) {
     return NextResponse.json({ erro: "Escolha ao menos uma conta." }, { status: 400 });
@@ -32,14 +31,17 @@ export async function POST(req: NextRequest) {
   if (new Date(scheduledAt).getTime() <= Date.now()) {
     return NextResponse.json({ erro: "A data/horário do agendamento precisa ser no futuro." }, { status: 400 });
   }
-  if (!media?.url || !media?.path || !media?.mediaType) {
-    return NextResponse.json({ erro: "Envie uma foto ou vídeo antes de agendar." }, { status: 400 });
+  if (mediaItems.length === 0) {
+    return NextResponse.json({ erro: "Envie ao menos uma foto ou vídeo antes de agendar." }, { status: 400 });
   }
-  if (ehReels && media.mediaType !== "VIDEO") {
-    return NextResponse.json({ erro: "Reels precisa de um vídeo — a mídia enviada é uma foto." }, { status: 400 });
+  if (mediaItems.length > 10) {
+    return NextResponse.json({ erro: "Carrossel aceita no máximo 10 arquivos." }, { status: 400 });
   }
-  if (capa && (!capa.url || !capa.path || capa.mediaType !== "IMAGE")) {
-    return NextResponse.json({ erro: "Capa inválida — envie uma imagem." }, { status: 400 });
+  if (mediaItems.some((m) => !m.url || !m.path || !m.mediaType)) {
+    return NextResponse.json(
+      { erro: "Um ou mais arquivos enviados ficaram incompletos — tente enviar de novo." },
+      { status: 400 }
+    );
   }
 
   const { data: contasEncontradas } = await admin.from("accounts").select("id").in("id", accountIds);
@@ -47,7 +49,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ erro: "Uma ou mais contas selecionadas não foram encontradas." }, { status: 404 });
   }
 
-  const mediaType: FeedMediaType = ehReels ? "REELS" : media.mediaType;
+  // Tipo decidido só pela quantidade/tipo de arquivo: 1 vídeo vira Reels,
+  // 1 foto vira post normal, 2 ou mais (qualquer mistura) vira carrossel.
+  const mediaType: FeedMediaType =
+    mediaItems.length > 1 ? "CAROUSEL" : mediaItems[0].mediaType === "VIDEO" ? "REELS" : "IMAGE";
 
   try {
     const { data: post, error: erroPost } = await admin
@@ -56,34 +61,23 @@ export async function POST(req: NextRequest) {
         caption,
         scheduled_at: scheduledAt,
         media_type: mediaType,
-        share_to_feed: ehReels ? shareToFeed : false,
+        share_to_feed: mediaType === "REELS", // Reels sempre aparece no feed também — sem precisar escolher
       })
       .select("*")
       .single();
 
     if (erroPost || !post) throw new Error(erroPost?.message || "Erro ao criar a publicação.");
 
-    // Mídia principal sempre na position 0. Se for Reels com capa enviada,
-    // a capa entra como uma segunda linha (position 1) — o cron busca por
-    // essa posição na hora de publicar.
-    const midias = [
-      {
-        feed_post_id: post.id,
-        position: 0,
-        media_url: media.url,
-        media_path: media.path,
-        media_type: media.mediaType,
-      },
-    ];
-    if (ehReels && capa?.url && capa?.path) {
-      midias.push({
-        feed_post_id: post.id,
-        position: 1,
-        media_url: capa.url,
-        media_path: capa.path,
-        media_type: "IMAGE",
-      });
-    }
+    // Uma linha por arquivo enviado, na ordem em que foram escolhidos — pro
+    // carrossel isso vira a ordem dos itens; pra foto/Reels avulso é só uma
+    // linha só, na position 0.
+    const midias = mediaItems.map((m, index) => ({
+      feed_post_id: post.id,
+      position: index,
+      media_url: m.url,
+      media_path: m.path,
+      media_type: m.mediaType,
+    }));
 
     const { error: erroMedia } = await admin.from("feed_post_media").insert(midias);
 
