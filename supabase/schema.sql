@@ -79,3 +79,7 @@ create policy "Leitura publica story-media"
 
 -- Escrita/alteração no bucket só pelo backend (service role), então não criamos
 -- policy de insert/update/delete pra anon/authenticated de propósito.
+
+-- Módulo de Publicações no Feed/Reels (feed_posts e afins): schema separado,
+-- em supabase/feed-posts.sql — rode aquele arquivo também se for uma
+-- instalação nova do zero.
