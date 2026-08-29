@@ -62,15 +62,18 @@ export async function removerMidia(admin: SupabaseClient, path: string) {
 // arquivo em si. Recebe o bucket como parâmetro (diferente de `enviarMidia`
 // acima, que é fixo no bucket "story-media" dos Stories) porque esse
 // mecanismo nasceu pro bucket novo "feed-media" e pode vir a ser usado por
-// outros buckets no futuro.
+// outros buckets no futuro. `pasta` é só uma etiqueta de organização dentro
+// do bucket (ex: "manual" pro fluxo manual, "drive" quando o sub-módulo do
+// Drive chegar) — não é mais amarrada a uma conta específica, porque desde
+// o broadcast pra várias contas uma mesma mídia pode valer pra mais de uma.
 export async function criarUploadAssinado(
   admin: SupabaseClient,
   bucket: string,
-  accountId: string,
+  pasta: string,
   fileName: string
 ) {
   const extensao = (fileName.split(".").pop() || "dat").toLowerCase();
-  const path = `${accountId}/${randomUUID()}.${extensao}`;
+  const path = `${pasta}/${randomUUID()}.${extensao}`;
 
   const { data, error } = await admin.storage.from(bucket).createSignedUploadUrl(path);
 
