@@ -42,3 +42,48 @@ export interface PendingConnectionPage {
   ig_username: string | null;
   page_access_token: string;
 }
+
+// ---------- Publicações no Feed/Reels (módulo novo, separado dos Stories) ----------
+
+export type FeedMediaType = "IMAGE" | "VIDEO" | "CAROUSEL" | "REELS";
+export type FeedPostStatus = "pending" | "publishing" | "success" | "error";
+export type FeedPostSource = "manual" | "drive";
+export type FeedPostAccountStatus = "pending" | "success" | "error";
+
+export interface FeedPost {
+  id: string;
+  caption: string;
+  scheduled_at: string; // timestamptz ISO
+  media_type: FeedMediaType;
+  share_to_feed: boolean; // só relevante pra REELS
+  source: FeedPostSource;
+  status: FeedPostStatus;
+  error_message: string | null;
+  published_at: string | null;
+  created_at: string;
+}
+
+// Uma mídia do post — 1 linha se for foto/vídeo/reels avulso, várias (position
+// 0, 1, 2...) se for carrossel.
+export interface FeedPostMedia {
+  id: string;
+  feed_post_id: string;
+  position: number;
+  media_url: string;
+  media_path: string;
+  media_type: MediaType;
+  created_at: string;
+}
+
+// Em qual conta esse post vai (ou já foi) publicado — status individual, pois
+// o mesmo post pode ir pra várias contas e cada uma pode ter um resultado diferente.
+export interface FeedPostAccount {
+  id: string;
+  feed_post_id: string;
+  account_id: string;
+  status: FeedPostAccountStatus;
+  ig_media_id: string | null;
+  error_message: string | null;
+  published_at: string | null;
+  created_at: string;
+}
