@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { agoraEmSaoPaulo } from "@/lib/days";
 import type { Account } from "@/types/database";
@@ -20,6 +19,8 @@ export default async function ContasPage({
 
   const lista = (contas ?? []) as Account[];
 
+  // Resumo do dia por conta (pra mostrar "3 de 10 postados" nos cards).
+  // Só duas consultas no total, independente de quantas contas existirem.
   const { diaSemanaIso, dataISO } = agoraEmSaoPaulo();
 
   const { data: slotsHojeData } = await admin
@@ -55,15 +56,7 @@ export default async function ContasPage({
             Escolha uma conta pra ver e editar a rotina semanal de Stories.
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <Link
-            href="/publicacoes"
-            className="whitespace-nowrap rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700"
-          >
-            Publicações
-          </Link>
-          <LogoutButton />
-        </div>
+        <LogoutButton />
       </div>
 
       {searchParams.erro && (
