@@ -1,6 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { agoraEmSaoPaulo } from "@/lib/days";
-import { buscarFotoDePerfilInstagram } from "@/lib/meta";
 import type { Account } from "@/types/database";
 import LogoutButton from "./LogoutButton";
 import ListaContas, { type ResumoDoDia } from "./ListaContas";
@@ -48,23 +47,6 @@ export default async function ContasPage({
     if (log.status === "error") resumoHoje[log.account_id].erros += 1;
   }
 
-  // Avatares são buscados direto na Graph API a cada carregamento (a URL do
-  // Meta expira, então não vale guardar no banco). Uma conta com token
-  // vencido ou instável não deve derrubar a tela inteira — só fica sem foto.
-  const avataresPorConta: Record<string, string | null> = {};
-  await Promise.all(
-    lista.map(async (conta) => {
-      try {
-        avataresPorConta[conta.id] = await buscarFotoDePerfilInstagram(
-          conta.ig_user_id,
-          conta.page_access_token
-        );
-      } catch {
-        avataresPorConta[conta.id] = null;
-      }
-    })
-  );
-
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
       <div className="mb-8 flex items-center justify-between">
@@ -83,12 +65,7 @@ export default async function ContasPage({
         </div>
       )}
 
-      <ListaContas
-        initialContas={lista}
-        diaHoje={diaSemanaIso}
-        resumoHoje={resumoHoje}
-        avataresPorConta={avataresPorConta}
-      />
+      <ListaContas initialContas={lista} diaHoje={diaSemanaIso} resumoHoje={resumoHoje} />
 
       {lista.length > 0 && (
         <p className="mt-8 text-xs text-slate-400">

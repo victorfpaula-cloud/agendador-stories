@@ -48,16 +48,15 @@ export default function ListaContas({
   initialContas,
   diaHoje,
   resumoHoje,
-  avataresPorConta,
 }: {
   initialContas: Account[];
   diaHoje: number;
   resumoHoje: Record<string, ResumoDoDia>;
-  avataresPorConta: Record<string, string | null>;
 }) {
   const [contas, setContas] = useState<Account[]>(initialContas);
   const [diaAtual, setDiaAtual] = useState(diaHoje);
   const [resumoAtual, setResumoAtual] = useState<Record<string, ResumoDoDia>>(resumoHoje);
+  const [avatares, setAvatares] = useState<Record<string, string | null>>({});
 
   function aoAtualizar(conta: Account) {
     setContas((atual) => atual.map((c) => (c.id === conta.id ? conta : c)));
@@ -98,6 +97,27 @@ export default function ListaContas({
     };
   }, []);
 
+  // Busca as fotos de perfil só depois que a tela já apareceu (cada uma
+  // exige uma chamada à Graph API do Meta, que é lenta demais pra travar o
+  // primeiro carregamento — principalmente no celular). Até chegar a
+  // resposta, cada card mostra o círculo com a inicial do nome.
+  useEffect(() => {
+    let cancelado = false;
+
+    chamarApi("/api/contas/avatares")
+      .then((json) => {
+        if (!cancelado) setAvatares(json.avatares);
+      })
+      .catch(() => {
+        // Sem foto de perfil por enquanto não é um erro que precise avisar
+        // o usuário: os cards continuam funcionando com a inicial do nome.
+      });
+
+    return () => {
+      cancelado = true;
+    };
+  }, []);
+
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
       <Link
@@ -124,7 +144,7 @@ export default function ListaContas({
         <ContaCard
           key={conta.id}
           conta={conta}
-          avatarUrl={avataresPorConta[conta.id] ?? null}
+          avatarUrl={avatares[conta.id] ?? null}
           resumo={resumoAtual[conta.id] ?? { total: 0, postados: 0, erros: 0 }}
           diaHoje={diaAtual}
           onAtualizar={aoAtualizar}
