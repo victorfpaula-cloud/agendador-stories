@@ -18,9 +18,8 @@ export async function POST(req: NextRequest) {
   const accountIds: string[] = Array.isArray(body?.accountIds)
     ? body.accountIds.filter((x: unknown) => typeof x === "string" && x)
     : [];
-  const mediaItems: { url?: string; path?: string; mediaType?: MediaType }[] = Array.isArray(body?.media)
-    ? body.media
-    : [];
+  const mediaItems: { url?: string; path?: string; mediaType?: MediaType; thumbnailDataUrl?: string | null }[] =
+    Array.isArray(body?.media) ? body.media : [];
 
   if (accountIds.length === 0) {
     return NextResponse.json({ erro: "Escolha ao menos uma conta." }, { status: 400 });
@@ -77,6 +76,7 @@ export async function POST(req: NextRequest) {
       media_url: m.url,
       media_path: m.path,
       media_type: m.mediaType,
+      thumbnail_data_url: m.thumbnailDataUrl ?? null,
     }));
 
     const { error: erroMedia } = await admin.from("feed_post_media").insert(midias);
