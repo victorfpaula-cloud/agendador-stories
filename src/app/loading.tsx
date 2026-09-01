@@ -13,10 +13,12 @@ export default function Loading() {
             funciona bem mesmo o ícone tendo fundo branco, já que o anel fica
             por fora dele. */}
         <div className="absolute inset-0 animate-spin rounded-full border-4 border-brand-100 border-t-brand-500" />
+        {/* Ícone com fundo transparente — sem moldura (cantos arredondados/
+            sombra), pra não aparecer uma "caixa" fantasma ao redor do desenho. */}
         <img
-          src="/icon.png"
+          src="/loading-icon.png"
           alt="Agendador de Stories"
-          className="h-28 w-28 animate-pop-in rounded-xl2 shadow-md"
+          className="h-28 w-28 animate-pop-in"
         />
       </div>
     </div>
