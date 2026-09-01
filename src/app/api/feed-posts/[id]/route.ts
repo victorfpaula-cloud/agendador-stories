@@ -111,7 +111,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
   // jeito, o pior caso é um arquivo órfão no bucket).
   const paths = ((midias ?? []) as Pick<FeedPostMedia, "media_path">[])
     .map((m) => m.media_path)
-    .filter(Boolean);
+    .filter((p): p is string => !!p);
   if (paths.length > 0) {
     try {
       await admin.storage.from("feed-media").remove(paths);
