@@ -72,6 +72,25 @@ async function executar(req: NextRequest) {
       continue;
     }
 
+    // Nunca deveria acontecer num post 'pending' recém-reivindicado (o
+    // arquivo original só é apagado depois de status='success' — ver bloco
+    // no fim deste loop), mas o TypeScript não sabe disso e a checagem é
+    // barata: se por algum motivo a mídia já não existir mais, marca erro
+    // em vez de mandar uma URL nula pro Instagram.
+    const midiaSemArquivo = midias.some((m) => !m.media_url);
+    if (midiaSemArquivo) {
+      await admin
+        .from("feed_posts")
+        .update({
+          status: "error",
+          error_message: "A mídia original já não está mais disponível pra publicar (estado inesperado).",
+        })
+        .eq("id", post.id);
+      resultados.push({ postId: post.id, status: "error", detalhe: "mídia já removida" });
+      continue;
+    }
+    const midiasComUrl = midias as (FeedPostMedia & { media_url: string })[];
+
     let algumSucesso = false;
     let algumErro = false;
 
@@ -93,14 +112,14 @@ async function executar(req: NextRequest) {
             ? await publicarPostCarrossel({
                 igUserId: conta.ig_user_id,
                 pageAccessToken: conta.page_access_token,
-                itens: midias.map((m) => ({ mediaUrl: m.media_url, mediaType: m.media_type })),
+                itens: midiasComUrl.map((m) => ({ mediaUrl: m.media_url, mediaType: m.media_type })),
                 caption: post.caption,
               })
             : await publicarPostFeed({
                 igUserId: conta.ig_user_id,
                 pageAccessToken: conta.page_access_token,
-                mediaUrl: midias[0].media_url,
-                mediaType: post.media_type === "REELS" ? "REELS" : midias[0].media_type,
+                mediaUrl: midiasComUrl[0].media_url,
+                mediaType: post.media_type === "REELS" ? "REELS" : midiasComUrl[0].media_type,
                 caption: post.caption,
                 shareToFeed: post.media_type === "REELS" ? post.share_to_feed : undefined,
               });
@@ -136,6 +155,28 @@ async function executar(req: NextRequest) {
         error_message: algumErro ? "Falhou em pelo menos uma conta-alvo — veja o detalhe por conta." : null,
       })
       .eq("id", post.id);
+
+    // Publicou com sucesso em todas as contas-alvo? A mídia original não
+    // precisa mais ficar no Storage — o Instagram já buscou ela na hora de
+    // publicar. Apaga os arquivos e limpa os links (a miniatura pequena,
+    // guardada como texto desde o upload, continua representando o post na
+    // tela). Best-effort: se der algum problema aqui, não desfaz nem afeta
+    // o status já salvo acima — o pior caso é um arquivo esquecido no
+    // bucket, não um post com status errado.
+    if (statusFinal === "success") {
+      try {
+        const paths = midias.map((m) => m.media_path).filter((p): p is string => !!p);
+        if (paths.length > 0) {
+          await admin.storage.from("feed-media").remove(paths);
+        }
+        await admin
+          .from("feed_post_media")
+          .update({ media_url: null, media_path: null })
+          .eq("feed_post_id", post.id);
+      } catch {
+        // Ignorado de propósito — ver comentário acima.
+      }
+    }
 
     resultados.push({ postId: post.id, status: statusFinal });
   }
