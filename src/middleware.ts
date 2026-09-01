@@ -52,5 +52,13 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  // Ícone, apple-icon e o manifest do PWA (gerados pelo Next a partir de
+  // src/app/icon.png, apple-icon.png e manifest.ts) precisam ser servidos
+  // sem exigir sessão — são pedidos pelo navegador/sistema ao instalar o
+  // app na tela de início, antes de qualquer login existir. Sem essa
+  // exclusão, esse pedido caía no redirect pra /login e o ícone/splash não
+  // aparecia.
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|manifest.webmanifest).*)",
+  ],
 };
