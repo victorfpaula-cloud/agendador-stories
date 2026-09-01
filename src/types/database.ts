@@ -69,9 +69,18 @@ export interface FeedPostMedia {
   id: string;
   feed_post_id: string;
   position: number;
-  media_url: string;
-  media_path: string;
+  // media_url/media_path apontam pro arquivo original no Storage — só
+  // existem até o post publicar com sucesso; depois disso o arquivo é
+  // apagado e esses dois campos ficam null (ver /api/cron/publicar-feed).
+  media_url: string | null;
+  media_path: string | null;
   media_type: MediaType;
+  // Miniatura pequena, gerada no navegador (ou null se não foi possível
+  // gerar) — guardada como data URL (texto) direto no banco, não como
+  // arquivo no Storage. É o que a tela mostra depois que o original é
+  // apagado, e some sozinha ~30 dias após a publicação (ver
+  // supabase/thumbnails.sql).
+  thumbnail_data_url: string | null;
   created_at: string;
 }
 
