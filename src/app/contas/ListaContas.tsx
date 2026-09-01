@@ -48,10 +48,12 @@ export default function ListaContas({
   initialContas,
   diaHoje,
   resumoHoje,
+  avataresPorConta,
 }: {
   initialContas: Account[];
   diaHoje: number;
   resumoHoje: Record<string, ResumoDoDia>;
+  avataresPorConta: Record<string, string | null>;
 }) {
   const [contas, setContas] = useState<Account[]>(initialContas);
   const [diaAtual, setDiaAtual] = useState(diaHoje);
@@ -122,6 +124,7 @@ export default function ListaContas({
         <ContaCard
           key={conta.id}
           conta={conta}
+          avatarUrl={avataresPorConta[conta.id] ?? null}
           resumo={resumoAtual[conta.id] ?? { total: 0, postados: 0, erros: 0 }}
           diaHoje={diaAtual}
           onAtualizar={aoAtualizar}
@@ -142,12 +145,14 @@ export default function ListaContas({
 
 function ContaCard({
   conta,
+  avatarUrl,
   resumo,
   diaHoje,
   onAtualizar,
   onRemover,
 }: {
   conta: Account;
+  avatarUrl: string | null;
   resumo: ResumoDoDia;
   diaHoje: number;
   onAtualizar: (conta: Account) => void;
@@ -155,6 +160,7 @@ function ContaCard({
 }) {
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const [fotoFalhou, setFotoFalhou] = useState(false);
 
   async function alternarPausa() {
     setCarregando(true);
@@ -200,9 +206,19 @@ function ContaCard({
     >
       <Link href={`/contas/${conta.id}`} className="group block">
         <div className="mb-3 flex items-center justify-between">
-          <div className="flex h-11 w-11 items-center justify-center rounded-full bg-brand-50 text-lg font-semibold text-brand-600">
-            {conta.name.charAt(0).toUpperCase()}
-          </div>
+          {avatarUrl && !fotoFalhou ? (
+            <img
+              src={avatarUrl}
+              alt={conta.name}
+              className="h-11 w-11 shrink-0 rounded-full object-cover ring-1 ring-slate-200"
+              referrerPolicy="no-referrer"
+              onError={() => setFotoFalhou(true)}
+            />
+          ) : (
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-50 text-lg font-semibold text-brand-600">
+              {conta.name.charAt(0).toUpperCase()}
+            </div>
+          )}
           {!conta.is_active && (
             <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">
               pausada

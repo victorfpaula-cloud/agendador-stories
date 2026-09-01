@@ -93,6 +93,18 @@ export async function buscarContaInstagramDaPagina(pageId: string, pageAccessTok
   return conta ?? null;
 }
 
+// Busca a foto de perfil atual do Instagram direto na Graph API, usando o
+// token já salvo da conta. Como a URL retornada pelo Meta expira depois de
+// um tempo, não vale a pena guardar no banco — é sempre buscada na hora de
+// montar a tela de contas.
+export async function buscarFotoDePerfilInstagram(igUserId: string, pageAccessToken: string) {
+  const json = await graphFetch(`/${igUserId}`, {
+    fields: "profile_picture_url",
+    access_token: pageAccessToken,
+  });
+  return (json.profile_picture_url as string | undefined) ?? null;
+}
+
 // ---------- Publicação de Stories ----------
 
 interface CriarContainerParams {
