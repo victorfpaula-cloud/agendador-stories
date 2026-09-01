@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { enviarMidiaDireto } from "@/lib/uploadDireto";
+import { gerarThumbnail } from "@/lib/thumbnail";
 import type { FeedPostComDetalhes, FeedPostStatus } from "@/types/database";
 
 const BUCKET = "feed-media";
@@ -179,12 +180,16 @@ function ComporPost({
     setEnviando(true);
     try {
       // Um upload de cada vez, na ordem em que os arquivos foram escolhidos
-      // — o servidor usa essa mesma ordem como ordem do carrossel.
-      const midias: { url: string; path: string; mediaType: string }[] = [];
+      // — o servidor usa essa mesma ordem como ordem do carrossel. Junto
+      // com cada arquivo, gera uma miniatura pequena no navegador (fica
+      // guardada pra sempre mesmo depois que o arquivo original for
+      // apagado do Storage após a publicação — ver /api/cron/publicar-feed).
+      const midias: { url: string; path: string; mediaType: string; thumbnailDataUrl: string | null }[] = [];
       for (let i = 0; i < files.length; i++) {
         setProgresso(files.length > 1 ? `Enviando arquivo ${i + 1} de ${files.length}…` : "Enviando mídia…");
         const midia = await enviarMidiaDireto(files[i], { bucket: BUCKET, pasta: "manual" });
-        midias.push(midia);
+        const thumbnailDataUrl = await gerarThumbnail(files[i]);
+        midias.push({ ...midia, thumbnailDataUrl });
       }
 
       setProgresso("Agendando…");
@@ -339,10 +344,13 @@ function CardPost({
   const contas = post.feed_post_accounts ?? [];
   const status = STATUS_INFO[post.status];
   const podeEditar = post.status === "pending";
+  // Depois de publicado não faz mais sentido excluir por aqui (a mídia
+  // original já nem existe mais no Storage) — some da tela.
+  const podeExcluir = post.status !== "success";
 
   async function excluir() {
     const aviso =
-      post.status === "success" || post.status === "publishing"
+      post.status === "publishing"
         ? "Essa publicação já foi enviada ao Instagram — excluir aqui só remove o registro do agendador, NÃO apaga o post lá. Excluir mesmo assim?"
         : "Excluir essa publicação agendada?";
     if (!confirm(aviso)) return;
@@ -374,7 +382,13 @@ function CardPost({
 
   return (
     <div className="flex items-start gap-3 rounded-xl2 bg-white p-3 shadow-sm ring-1 ring-slate-200">
-      {midia && <MiniaturaMidia url={midia.media_url} tipo={midia.media_type} />}
+      {midia && (
+        <MiniaturaMidia
+          url={midia.media_url}
+          thumbnailDataUrl={midia.thumbnail_data_url}
+          tipo={midia.media_type}
+        />
+      )}
 
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
@@ -416,14 +430,16 @@ function CardPost({
               Editar
             </button>
           )}
-          <button
-            type="button"
-            onClick={excluir}
-            disabled={excluindo}
-            className="text-xs font-medium text-red-500 hover:text-red-700 disabled:opacity-60"
-          >
-            {excluindo ? "…" : "Excluir"}
-          </button>
+          {podeExcluir && (
+            <button
+              type="button"
+              onClick={excluir}
+              disabled={excluindo}
+              className="text-xs font-medium text-red-500 hover:text-red-700 disabled:opacity-60"
+            >
+              {excluindo ? "…" : "Excluir"}
+            </button>
+          )}
         </div>
         {erroExclusao && <p className="mt-1 text-xs text-red-600">{erroExclusao}</p>}
       </div>
@@ -500,7 +516,13 @@ function EditarPost({
   return (
     <div className="rounded-xl2 bg-white p-3 shadow-sm ring-2 ring-brand-300">
       <div className="flex items-start gap-3">
-        {midia && <MiniaturaMidia url={midia.media_url} tipo={midia.media_type} />}
+        {midia && (
+        <MiniaturaMidia
+          url={midia.media_url}
+          thumbnailDataUrl={midia.thumbnail_data_url}
+          tipo={midia.media_type}
+        />
+      )}
         <p className="pt-1.5 text-xs text-slate-400">
           A mídia não dá pra trocar por aqui — só legenda, contas e horário. Pra trocar a mídia,
           exclua e crie de novo.
@@ -582,10 +604,39 @@ function EditarPost({
   );
 }
 
-function MiniaturaMidia({ url, tipo }: { url: string; tipo: string }) {
-  if (tipo === "VIDEO") {
-    return <video src={url} className="h-12 w-12 shrink-0 rounded-md object-cover" muted />;
+// Prioridade de exibição: a miniatura pequena (gerada no navegador, guardada
+// pra sempre) primeiro — mais leve e continua existindo mesmo depois que o
+// arquivo original é apagado do Storage após a publicação. Se não tiver
+// miniatura (ex: post veio do Drive, que ainda não gera uma), cai pro
+// arquivo original enquanto ele ainda existir. Se nenhum dos dois existir
+// mais, mostra um quadradinho genérico em vez de ficar quebrado.
+function MiniaturaMidia({
+  url,
+  thumbnailDataUrl,
+  tipo,
+}: {
+  url: string | null;
+  thumbnailDataUrl: string | null;
+  tipo: string;
+}) {
+  if (thumbnailDataUrl) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={thumbnailDataUrl} alt="" className="h-12 w-12 shrink-0 rounded-md object-cover" />;
   }
-  // eslint-disable-next-line @next/next/no-img-element
-  return <img src={url} alt="" className="h-12 w-12 shrink-0 rounded-md object-cover" />;
+  if (url) {
+    if (tipo === "VIDEO") {
+      return <video src={url} className="h-12 w-12 shrink-0 rounded-md object-cover" muted />;
+    }
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={url} alt="" className="h-12 w-12 shrink-0 rounded-md object-cover" />;
+  }
+  return (
+    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-slate-100 text-slate-400">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+        <rect x="3" y="4" width="18" height="16" rx="2.5" />
+        <circle cx="8.5" cy="9.5" r="1.5" />
+        <path d="M21 15l-5.5-5.5a1.5 1.5 0 0 0-2.1 0L3 20" />
+      </svg>
+    </div>
+  );
 }
