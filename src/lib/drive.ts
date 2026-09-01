@@ -111,22 +111,42 @@ export function extrairIdDaPasta(valor: string): string {
   return trecho;
 }
 
-// Acha, dentro de uma pasta-pai, uma subpasta com um nome exato. Devolve
-// `null` se não existir — isso é esperado e normal (ex: mês ainda não tem
-// pasta, ou dia sem post), não é tratado como erro por quem chama.
+// Deixa um nome de pasta "neutro" pra comparar: tira espaço sobrando nas
+// pontas, ignora maiúscula/minúscula, junta espaços duplos e trata
+// qualquer tipo de travessão (en dash "–", em dash "—", o hífen "normal"
+// que às vezes vira outro no iPad por causa da correção automática de
+// pontuação) como o mesmo traço. Achado em 01/09/2026: a pasta do mês
+// existia e estava certa aos olhos do Victor, mas a busca exata não achou
+// — bem provável que o "corretor" do iPad tenha trocado o hífen por outro
+// traço na hora de criar a pasta. Normalizando os dois lados da comparação
+// (o nome esperado E o nome real de cada pasta), esse tipo de diferença
+// invisível deixa de derrubar a automação.
+function normalizarNomeDePasta(nome: string): string {
+  return nome
+    .trim()
+    .toLowerCase()
+    .replace(/[‐-―−]/g, "-")
+    .replace(/\s+/g, " ");
+}
+
+// Acha, dentro de uma pasta-pai, uma subpasta cujo nome bate com o
+// esperado (comparação tolerante — ver normalizarNomeDePasta acima).
+// Devolve `null` se não existir — isso é esperado e normal (ex: mês ainda
+// não tem pasta, ou dia sem post), não é tratado como erro por quem chama.
 export async function encontrarSubpasta(
   accessToken: string,
   pastaPaiId: string,
   nome: string
 ): Promise<string | null> {
-  const nomeEscapado = nome.replace(/'/g, "\\'");
-  const q = `'${pastaPaiId}' in parents and name = '${nomeEscapado}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
+  const q = `'${pastaPaiId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
   const json = await chamarDriveApi(
     accessToken,
-    `files?q=${encodeURIComponent(q)}&fields=files(id,name)&pageSize=1&supportsAllDrives=true&includeItemsFromAllDrives=true`
+    `files?q=${encodeURIComponent(q)}&fields=files(id,name)&pageSize=100&supportsAllDrives=true&includeItemsFromAllDrives=true`
   );
   const arquivos = (json.files ?? []) as ArquivoDrive[];
-  return arquivos[0]?.id ?? null;
+  const alvo = normalizarNomeDePasta(nome);
+  const encontrada = arquivos.find((a) => normalizarNomeDePasta(a.name) === alvo);
+  return encontrada?.id ?? null;
 }
 
 // Lista os arquivos (não-pastas) dentro de uma pasta, em ordem alfabética
