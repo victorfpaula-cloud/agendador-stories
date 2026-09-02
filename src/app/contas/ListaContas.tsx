@@ -126,9 +126,10 @@ export default function ListaContas({
       >
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-600 group-hover:bg-brand-100">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
-            <rect x="3" y="4" width="18" height="16" rx="2.5" />
-            <circle cx="8.5" cy="9.5" r="1.5" />
-            <path d="M21 15l-5.5-5.5a1.5 1.5 0 0 0-2.1 0L3 20" />
+            <rect x="3" y="3" width="7.5" height="7.5" rx="1.8" />
+            <rect x="13.5" y="3" width="7.5" height="7.5" rx="1.8" />
+            <rect x="3" y="13.5" width="7.5" height="7.5" rx="1.8" />
+            <rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.8" />
           </svg>
         </div>
         <div className="min-w-0 flex-1">
