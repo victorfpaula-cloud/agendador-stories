@@ -26,23 +26,25 @@ export default async function PublicacoesPage() {
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
-      <div className="mb-8 flex items-start justify-between gap-3">
-        <div>
-          <Link href="/contas" className="text-sm text-slate-500 hover:underline">
-            ← Todas as contas
-          </Link>
-          <h1 className="mt-1 text-2xl font-semibold text-slate-900">Publicações</h1>
-          <p className="text-sm text-slate-500">
-            Feed, Reels e carrossel — agendamento avulso, separado da rotina semanal de Stories.
-          </p>
-        </div>
-        <Link
-          href="/publicacoes/drive"
-          className="shrink-0 rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200"
-        >
-          Automação do Drive
+      <div className="mb-4">
+        <Link href="/contas" className="text-sm text-slate-500 hover:underline">
+          ← Todas as contas
         </Link>
+        <h1 className="mt-1 text-2xl font-semibold text-slate-900">Publicações</h1>
+        <p className="text-sm text-slate-500">
+          Feed, Reels e carrossel — agendamento avulso, separado da rotina semanal de Stories.
+        </p>
       </div>
+
+      <Link
+        href="/publicacoes/drive"
+        className="mb-8 inline-flex items-center gap-1.5 rounded-full bg-teal-50 px-3 py-1 text-xs font-medium text-teal-700 ring-1 ring-inset ring-teal-200 transition-colors hover:bg-teal-100"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
+          <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+        </svg>
+        Automação do Drive
+      </Link>
 
       {error && (
         <div className="mb-6 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 ring-1 ring-red-200">
