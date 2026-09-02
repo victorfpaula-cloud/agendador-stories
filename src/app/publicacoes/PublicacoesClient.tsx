@@ -344,8 +344,10 @@ function CardPost({
   const contas = post.feed_post_accounts ?? [];
   const status = STATUS_INFO[post.status];
   const podeEditar = post.status === "pending";
-  // Depois de publicado não faz mais sentido excluir por aqui (a mídia
-  // original já nem existe mais no Storage) — some da tela.
+  // Publicação já postada não dá pra excluir por aqui de propósito: a
+  // limpeza automática (últimos 15 postados — ver /api/cron/publicar-feed)
+  // já cuida de remover o registro e o arquivo sozinha depois de um tempo,
+  // então não faz sentido duplicar esse controle aqui.
   const podeExcluir = post.status !== "success";
 
   async function excluir() {
