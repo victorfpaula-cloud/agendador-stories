@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { enviarMidia, removerMidia } from "@/lib/storage";
+import { removerMidia } from "@/lib/storage";
 
 export async function PATCH(req: NextRequest, { params }: { params: { slotId: string } }) {
   const admin = createAdminClient();
@@ -16,9 +16,12 @@ export async function PATCH(req: NextRequest, { params }: { params: { slotId: st
     return NextResponse.json({ erro: "Horário não encontrado." }, { status: 404 });
   }
 
-  const formData = await req.formData();
-  const horario = formData.get("time_of_day");
-  const file = formData.get("file") as File | null;
+  const body = await req.json().catch(() => null);
+  const horario = body?.time_of_day;
+  // A mídia já chega pronta no Storage (upload direto do navegador — ver
+  // POST /api/accounts/[id]/slots para o motivo); essa rota só recebe a
+  // referência, nunca o arquivo em si.
+  const media = body?.media as { url?: string; path?: string; mediaType?: string } | undefined;
 
   const atualizacao: Record<string, unknown> = {};
 
@@ -29,16 +32,13 @@ export async function PATCH(req: NextRequest, { params }: { params: { slotId: st
     atualizacao.time_of_day = horario.length === 5 ? `${horario}:00` : horario;
   }
 
-  if (file && file.size > 0) {
-    try {
-      const midia = await enviarMidia(admin, slotAtual.account_id, file);
-      atualizacao.media_url = midia.url;
-      atualizacao.media_path = midia.path;
-      atualizacao.media_type = midia.mediaType;
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Erro ao enviar o novo arquivo.";
-      return NextResponse.json({ erro: msg }, { status: 500 });
+  if (media) {
+    if (!media.url || !media.path || (media.mediaType !== "IMAGE" && media.mediaType !== "VIDEO")) {
+      return NextResponse.json({ erro: "Mídia inválida." }, { status: 400 });
     }
+    atualizacao.media_url = media.url;
+    atualizacao.media_path = media.path;
+    atualizacao.media_type = media.mediaType;
   }
 
   if (Object.keys(atualizacao).length === 0) {
