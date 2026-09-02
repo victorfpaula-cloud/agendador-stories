@@ -9,6 +9,14 @@ function detectarTipoMidiaCliente(contentType: string): MediaType {
   throw new Error("Arquivo precisa ser uma imagem ou um vídeo.");
 }
 
+// Pega o caso de uma foto/vídeo do iCloud que não terminou de baixar no
+// celular antes de ser selecionado: o navegador entrega um arquivo
+// minúsculo/vazio em vez da mídia de verdade.
+const TAMANHO_MINIMO_BYTES: Record<MediaType, number> = {
+  IMAGE: 5_000,
+  VIDEO: 20_000,
+};
+
 // Sobe o arquivo direto do navegador pro Supabase Storage, sem passar pelo
 // servidor da Vercel — evita o limite de ~4,5MB de corpo de requisição que
 // afeta uploads normais (relevante principalmente pra vídeo). O servidor só
@@ -19,6 +27,13 @@ export async function enviarMidiaDireto(
   { bucket, pasta }: { bucket: string; pasta: string }
 ): Promise<{ url: string; path: string; mediaType: MediaType }> {
   const mediaType = detectarTipoMidiaCliente(file.type || "");
+
+  if (file.size < TAMANHO_MINIMO_BYTES[mediaType]) {
+    throw new Error(
+      "O arquivo parece incompleto (muito pequeno pra ser uma foto/vídeo de verdade). " +
+        "Se ele veio do iCloud, espera terminar de baixar no celular e tenta selecionar de novo."
+    );
+  }
 
   const res = await fetch("/api/uploads/signed-url", {
     method: "POST",

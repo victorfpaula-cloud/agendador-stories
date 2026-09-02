@@ -4,7 +4,10 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { DIAS_SEMANA } from "@/lib/days";
 import { prepararImagem } from "@/lib/imagemCliente";
+import { enviarMidiaDireto } from "@/lib/uploadDireto";
 import type { ScheduleSlot } from "@/types/database";
+
+const BUCKET_STORIES = "story-media";
 
 type StatusHoje = "success" | "error" | "pendente";
 
@@ -174,9 +177,11 @@ function LinhaSalva({
     setCarregando(true);
     setErro(null);
     try {
-      const fd = new FormData();
-      fd.set("time_of_day", novoHorario);
-      const json = await chamarApi(`/api/slots/${slot.id}`, { method: "PATCH", body: fd });
+      const json = await chamarApi(`/api/slots/${slot.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ time_of_day: novoHorario }),
+      });
       onAtualizar(json.slot);
     } catch (err) {
       setErro(err instanceof Error ? err.message : "Erro ao salvar horário.");
@@ -190,9 +195,12 @@ function LinhaSalva({
     setErro(null);
     try {
       const arquivoFinal = await prepararImagem(file);
-      const fd = new FormData();
-      fd.set("file", arquivoFinal);
-      const json = await chamarApi(`/api/slots/${slot.id}`, { method: "PATCH", body: fd });
+      const media = await enviarMidiaDireto(arquivoFinal, { bucket: BUCKET_STORIES, pasta: slot.account_id });
+      const json = await chamarApi(`/api/slots/${slot.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ media }),
+      });
       onAtualizar(json.slot);
     } catch (err) {
       setErro(err instanceof Error ? err.message : "Erro ao trocar mídia.");
@@ -277,12 +285,13 @@ function LinhaNova({
 
     try {
       const arquivoFinal = await prepararImagem(file);
-      const fd = new FormData();
-      fd.set("day_of_week", String(diaSemana));
-      fd.set("time_of_day", horario);
-      fd.set("file", arquivoFinal);
+      const media = await enviarMidiaDireto(arquivoFinal, { bucket: BUCKET_STORIES, pasta: accountId });
 
-      const json = await chamarApi(`/api/accounts/${accountId}/slots`, { method: "POST", body: fd });
+      const json = await chamarApi(`/api/accounts/${accountId}/slots`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ day_of_week: diaSemana, time_of_day: horario, media }),
+      });
       onSalvo(json.slot);
       setHorario("");
       setFile(null);
