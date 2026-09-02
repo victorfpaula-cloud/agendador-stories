@@ -69,9 +69,11 @@ export interface FeedPostMedia {
   id: string;
   feed_post_id: string;
   position: number;
-  // media_url/media_path apontam pro arquivo original no Storage — só
-  // existem até o post publicar com sucesso; depois disso o arquivo é
-  // apagado e esses dois campos ficam null (ver /api/cron/publicar-feed).
+  // media_url/media_path apontam pro arquivo original no Storage — continuam
+  // existindo mesmo depois do post publicar (é o que a tela mostra até virar
+  // um post "antigo"). Somem quando a publicação é apagada, seja manualmente
+  // ou pela limpeza automática que mantém só os últimos 15 posts publicados
+  // (ver podarPublicacoesAntigas em /api/cron/publicar-feed).
   media_url: string | null;
   media_path: string | null;
   media_type: MediaType;

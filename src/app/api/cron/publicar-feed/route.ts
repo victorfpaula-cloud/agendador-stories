@@ -72,9 +72,9 @@ async function executar(req: NextRequest) {
       continue;
     }
 
-    // Nunca deveria acontecer num post 'pending' recém-reivindicado (o
-    // arquivo original só é apagado depois de status='success' — ver bloco
-    // no fim deste loop), mas o TypeScript não sabe disso e a checagem é
+    // Nunca deveria acontecer num post 'pending' recém-reivindicado (a
+    // poda automática só mexe em posts 'success' — ver podarPublicacoesAntigas
+    // no fim deste arquivo), mas o TypeScript não sabe disso e a checagem é
     // barata: se por algum motivo a mídia já não existir mais, marca erro
     // em vez de mandar uma URL nula pro Instagram.
     const midiaSemArquivo = midias.some((m) => !m.media_url);
@@ -146,6 +146,9 @@ async function executar(req: NextRequest) {
     }
 
     // Status final do post: só "success" se TODAS as contas-alvo publicaram.
+    // A mídia original fica no Storage mesmo depois de publicar (ela é o que
+    // a tela mostra até virar um post "antigo") — quem cuida de limpar isso
+    // é a poda automática no fim desta rota, não aqui.
     const statusFinal = algumErro ? "error" : "success";
     await admin
       .from("feed_posts")
@@ -156,30 +159,10 @@ async function executar(req: NextRequest) {
       })
       .eq("id", post.id);
 
-    // Publicou com sucesso em todas as contas-alvo? A mídia original não
-    // precisa mais ficar no Storage — o Instagram já buscou ela na hora de
-    // publicar. Apaga os arquivos e limpa os links (a miniatura pequena,
-    // guardada como texto desde o upload, continua representando o post na
-    // tela). Best-effort: se der algum problema aqui, não desfaz nem afeta
-    // o status já salvo acima — o pior caso é um arquivo esquecido no
-    // bucket, não um post com status errado.
-    if (statusFinal === "success") {
-      try {
-        const paths = midias.map((m) => m.media_path).filter((p): p is string => !!p);
-        if (paths.length > 0) {
-          await admin.storage.from("feed-media").remove(paths);
-        }
-        await admin
-          .from("feed_post_media")
-          .update({ media_url: null, media_path: null })
-          .eq("feed_post_id", post.id);
-      } catch {
-        // Ignorado de propósito — ver comentário acima.
-      }
-    }
-
     resultados.push({ postId: post.id, status: statusFinal });
   }
+
+  const podados = await podarPublicacoesAntigas(admin);
 
   return NextResponse.json({
     executadoEm: agoraISO,
@@ -187,5 +170,50 @@ async function executar(req: NextRequest) {
     publicados: resultados.filter((r) => r.status === "success").length,
     falhas: resultados.filter((r) => r.status === "error").length,
     detalhes: resultados,
+    podados,
   });
+}
+
+// Quantas publicações já postadas ficam disponíveis na tela (com a mídia de
+// verdade, não só a miniatura) antes de serem limpas pra não acumular
+// arquivo pra sempre no Storage. Só conta publicações com status "success"
+// — as pendentes/com erro nunca são tocadas aqui, precisam continuar
+// visíveis até serem resolvidas.
+const LIMITE_PUBLICACOES_PUBLICADAS = 15;
+
+// Roda a cada ciclo do cron (a cada 5 min): busca publicações já postadas
+// além das mais recentes (até 200 de uma vez, o suficiente pra zerar
+// qualquer atraso em poucos ciclos) e apaga tudo — registro e arquivo no
+// Storage. Best-effort e isolado: se algo aqui falhar, não afeta em nada o
+// que já foi publicado acima nesta mesma execução.
+async function podarPublicacoesAntigas(admin: ReturnType<typeof createAdminClient>): Promise<number> {
+  try {
+    const { data: antigos } = await admin
+      .from("feed_posts")
+      .select("id, feed_post_media(media_path)")
+      .eq("status", "success")
+      .order("published_at", { ascending: false })
+      .range(LIMITE_PUBLICACOES_PUBLICADAS, LIMITE_PUBLICACOES_PUBLICADAS + 199);
+
+    if (!antigos || antigos.length === 0) return 0;
+
+    const paths = (antigos as any[])
+      .flatMap((p) => (p.feed_post_media ?? []).map((m: { media_path: string | null }) => m.media_path))
+      .filter((p): p is string => !!p);
+
+    const { error } = await admin
+      .from("feed_posts")
+      .delete()
+      .in("id", antigos.map((p) => p.id));
+
+    if (error) return 0;
+
+    if (paths.length > 0) {
+      await admin.storage.from("feed-media").remove(paths);
+    }
+
+    return antigos.length;
+  } catch {
+    return 0;
+  }
 }
