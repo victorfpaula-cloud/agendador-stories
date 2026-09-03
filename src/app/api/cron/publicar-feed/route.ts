@@ -1,7 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { publicarPostFeed, publicarPostCarrossel, MetaApiError } from "@/lib/meta";
+import { enviarEmail } from "@/lib/email";
 import type { Account, FeedPostAccount, FeedPostMedia } from "@/types/database";
+
+function formatarDataHoraSaoPaulo(iso: string): string {
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(iso));
+}
 
 // Motor de publicação do módulo de Publicações (feed/Reels/carrossel) — rota
 // própria, separada de /api/cron/run (o motor de Stories), pra nunca correr
@@ -93,16 +104,19 @@ async function executar(req: NextRequest) {
 
     let algumSucesso = false;
     let algumErro = false;
+    const falhasPorConta: { conta: string; mensagem: string }[] = [];
 
     for (const contaAlvo of contasAlvo) {
       const conta = contaAlvo.accounts;
 
       if (!conta.is_active) {
+        const mensagem = "Conta está pausada — retome a conta pra publicar nela.";
         await admin
           .from("feed_post_accounts")
-          .update({ status: "error", error_message: "Conta está pausada — retome a conta pra publicar nela." })
+          .update({ status: "error", error_message: mensagem })
           .eq("id", contaAlvo.id);
         algumErro = true;
+        falhasPorConta.push({ conta: conta.name, mensagem });
         continue;
       }
 
@@ -142,6 +156,7 @@ async function executar(req: NextRequest) {
           .update({ status: "error", error_message: msg })
           .eq("id", contaAlvo.id);
         algumErro = true;
+        falhasPorConta.push({ conta: conta.name, mensagem: msg });
       }
     }
 
@@ -155,6 +170,21 @@ async function executar(req: NextRequest) {
         error_message: algumErro ? "Falhou em pelo menos uma conta-alvo — veja o detalhe por conta." : null,
       })
       .eq("id", post.id);
+
+    // Diferente dos Stories, um post do Feed nunca é tentado de novo depois
+    // de sair de 'pending' (ver query no início desta rota) — então essa
+    // falha é definitiva, e um e-mail só por post é o suficiente, sem risco
+    // de mandar duplicado numa retentativa.
+    if (statusFinal === "error") {
+      await enviarEmail({
+        assunto: `Erro ao publicar no Feed — ${post.media_type}`,
+        corpo:
+          `A publicação agendada pra ${formatarDataHoraSaoPaulo(post.scheduled_at)} teve erro em ` +
+          `${falhasPorConta.length} conta(s):\n\n` +
+          falhasPorConta.map((f) => `• ${f.conta}: ${f.mensagem}`).join("\n") +
+          `\n\nPublica manualmente enquanto isso.`,
+      });
+    }
 
     // Publicou com sucesso em todas as contas-alvo? A mídia original não
     // precisa mais ficar no Storage — o Instagram já buscou ela na hora de

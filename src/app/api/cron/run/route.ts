@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { agoraEmSaoPaulo, paraMinutos } from "@/lib/days";
 import { publicarStory, MetaApiError } from "@/lib/meta";
+import { enviarEmail } from "@/lib/email";
 import type { Account, ScheduleSlot } from "@/types/database";
 
 export const dynamic = "force-dynamic";
@@ -111,6 +112,18 @@ async function executar(req: NextRequest) {
     } catch (err) {
       const msg = err instanceof MetaApiError || err instanceof Error ? err.message : "Erro desconhecido";
 
+      // Já existe um erro registrado hoje pra esse horário? O cron roda a
+      // cada 5 min e tenta de novo dentro da janela de tolerância — sem essa
+      // checagem, uma falha persistente mandaria um e-mail a cada nova
+      // tentativa em vez de só na primeira.
+      const { data: erroAnterior } = await admin
+        .from("publish_log")
+        .select("id")
+        .eq("slot_id", slot.id)
+        .eq("scheduled_for", dataISO)
+        .eq("status", "error")
+        .maybeSingle();
+
       await admin
         .from("publish_log")
         .upsert(
@@ -125,6 +138,18 @@ async function executar(req: NextRequest) {
         );
 
       resultados.push({ slotId: slot.id, conta: conta.name, status: "error", detalhe: msg });
+
+      if (!erroAnterior) {
+        await enviarEmail({
+          assunto: `Erro ao publicar Story — ${conta.name}`,
+          corpo:
+            `A conta "${conta.name}" teve um erro ao tentar publicar o Story agendado pra hoje ` +
+            `(${dataISO}), horário ${slot.time_of_day.slice(0, 5)}.\n\n` +
+            `Erro: ${msg}\n\n` +
+            `O cron continua tentando de novo por até ${TOLERANCIA_MINUTOS} minutos — se não conseguir, ` +
+            `publica esse Story manualmente.`,
+        });
+      }
     }
   }
 
