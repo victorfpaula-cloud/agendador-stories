@@ -20,6 +20,14 @@ export interface ScheduleSlot {
   media_url: string;
   media_path: string;
   media_type: MediaType;
+  // Miniatura pequena (data URL, gerada no navegador — ver gerarThumbnail em
+  // thumbnail.ts), usada como preview na grade da semana. Diferente do
+  // módulo de Publicações, aqui o arquivo original NUNCA é apagado (o mesmo
+  // Story se repete toda semana, no ciclo recorrente), então a miniatura é
+  // só pra evitar carregar o arquivo inteiro à toa — não substitui o
+  // original. Pode ser null (arquivo enviado antes dessa miniatura existir,
+  // ou geração falhou) — nesse caso a tela cai pro arquivo original mesmo.
+  thumbnail_data_url: string | null;
   is_active: boolean;
   created_at: string;
 }
@@ -69,11 +77,11 @@ export interface FeedPostMedia {
   id: string;
   feed_post_id: string;
   position: number;
-  // media_url/media_path apontam pro arquivo original no Storage — continuam
-  // existindo mesmo depois do post publicar (é o que a tela mostra até virar
-  // um post "antigo"). Somem quando a publicação é apagada, seja manualmente
-  // ou pela limpeza automática que mantém só os últimos 15 posts publicados
-  // (ver podarPublicacoesAntigas em /api/cron/publicar-feed).
+  // media_url/media_path apontam pro arquivo original no Storage — só
+  // existem até o post publicar com sucesso; depois disso o arquivo é
+  // apagado e esses dois campos ficam null (ver /api/cron/publicar-feed). A
+  // miniatura abaixo é a única coisa que sobra pra representar o post dali
+  // em diante.
   media_url: string | null;
   media_path: string | null;
   media_type: MediaType;

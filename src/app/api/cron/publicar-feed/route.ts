@@ -72,9 +72,9 @@ async function executar(req: NextRequest) {
       continue;
     }
 
-    // Nunca deveria acontecer num post 'pending' recém-reivindicado (a
-    // poda automática só mexe em posts 'success' — ver podarPublicacoesAntigas
-    // no fim deste arquivo), mas o TypeScript não sabe disso e a checagem é
+    // Nunca deveria acontecer num post 'pending' recém-reivindicado (o
+    // arquivo original só é apagado depois de status='success' — ver bloco
+    // no fim deste loop), mas o TypeScript não sabe disso e a checagem é
     // barata: se por algum motivo a mídia já não existir mais, marca erro
     // em vez de mandar uma URL nula pro Instagram.
     const midiaSemArquivo = midias.some((m) => !m.media_url);
@@ -146,9 +146,6 @@ async function executar(req: NextRequest) {
     }
 
     // Status final do post: só "success" se TODAS as contas-alvo publicaram.
-    // A mídia original fica no Storage mesmo depois de publicar (ela é o que
-    // a tela mostra até virar um post "antigo") — quem cuida de limpar isso
-    // é a poda automática no fim desta rota, não aqui.
     const statusFinal = algumErro ? "error" : "success";
     await admin
       .from("feed_posts")
@@ -158,6 +155,32 @@ async function executar(req: NextRequest) {
         error_message: algumErro ? "Falhou em pelo menos uma conta-alvo — veja o detalhe por conta." : null,
       })
       .eq("id", post.id);
+
+    // Publicou com sucesso em todas as contas-alvo? A mídia original não
+    // precisa mais ficar no Storage — o Instagram já buscou ela na hora de
+    // publicar, e a miniatura pequena (gerada no navegador pro fluxo manual,
+    // ou pelo próprio Drive pro fluxo automático — sempre presente antes do
+    // post chegar aqui) continua representando o post na tela. Apaga na
+    // hora, em vez de esperar a poda dos 15 mais antigos: mídia original
+    // costuma ser MB, a miniatura é só alguns KB de texto no banco — não
+    // faz sentido manter o arquivo grande por dias só pra um post que já
+    // foi ao ar. Best-effort: se der algum problema aqui, não desfaz nem
+    // afeta o status já salvo acima — o pior caso é um arquivo esquecido no
+    // bucket, não um post com status errado.
+    if (statusFinal === "success") {
+      try {
+        const paths = midias.map((m) => m.media_path).filter((p): p is string => !!p);
+        if (paths.length > 0) {
+          await admin.storage.from("feed-media").remove(paths);
+        }
+        await admin
+          .from("feed_post_media")
+          .update({ media_url: null, media_path: null })
+          .eq("feed_post_id", post.id);
+      } catch {
+        // Ignorado de propósito — ver comentário acima.
+      }
+    }
 
     resultados.push({ postId: post.id, status: statusFinal });
   }
@@ -174,18 +197,19 @@ async function executar(req: NextRequest) {
   });
 }
 
-// Quantas publicações já postadas ficam disponíveis na tela (com a mídia de
-// verdade, não só a miniatura) antes de serem limpas pra não acumular
-// arquivo pra sempre no Storage. Só conta publicações com status "success"
-// — as pendentes/com erro nunca são tocadas aqui, precisam continuar
-// visíveis até serem resolvidas.
+// Quantos posts publicados ficam guardados na tela (só o registro + a
+// miniatura pequena — o arquivo original já foi apagado na hora, ver bloco
+// acima). Só conta publicações com status "success" — as pendentes/com erro
+// nunca são tocadas aqui, precisam continuar visíveis até serem resolvidas.
 const LIMITE_PUBLICACOES_PUBLICADAS = 15;
 
-// Roda a cada ciclo do cron (a cada 5 min): busca publicações já postadas
-// além das mais recentes (até 200 de uma vez, o suficiente pra zerar
-// qualquer atraso em poucos ciclos) e apaga tudo — registro e arquivo no
-// Storage. Best-effort e isolado: se algo aqui falhar, não afeta em nada o
-// que já foi publicado acima nesta mesma execução.
+// Roda a cada ciclo do cron (a cada 5 min): apaga o registro dos posts
+// publicados mais antigos que isso (até 200 de uma vez, o suficiente pra
+// zerar qualquer atraso em poucos ciclos) — normalmente não sobra arquivo
+// nenhum no Storage pra remover aqui (isso já foi feito na hora da
+// publicação), mas o remove() abaixo cobre qualquer caso em que aquele
+// passo tenha falhado antes. Best-effort e isolado: se algo aqui falhar,
+// não afeta em nada o que já foi publicado acima nesta mesma execução.
 async function podarPublicacoesAntigas(admin: ReturnType<typeof createAdminClient>): Promise<number> {
   try {
     const { data: antigos } = await admin
