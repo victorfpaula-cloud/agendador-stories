@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { agoraEmSaoPaulo, paraMinutos } from "@/lib/days";
 import { publicarStory, MetaApiError } from "@/lib/meta";
-import { gerarThumbnailServidor } from "@/lib/thumbnailServidor";
 import type { Account, ScheduleSlot } from "@/types/database";
 
 export const dynamic = "force-dynamic";
@@ -109,17 +108,6 @@ async function executar(req: NextRequest) {
         );
 
       resultados.push({ slotId: slot.id, conta: conta.name, status: "success" });
-
-      // Aproveita o post ter acabado de publicar (o arquivo já foi baixado
-      // pelo Instagram, então já sabemos que a URL é válida) pra preencher a
-      // miniatura de horários antigos que ainda não têm uma — sem isso, a
-      // grade da semana carrega o arquivo original inteiro só pra desenhar
-      // um quadradinho de 36x36px (foi o que estourou o Cached Egress do
-      // Supabase, ver comentário em WeekEditor.tsx). Só foto, best-effort:
-      // se falhar por qualquer motivo, não afeta a publicação — já
-      // aconteceu e já foi registrada acima. Vídeo continua de fora aqui
-      // (ver thumbnailServidor.ts) até a mídia ser trocada pela tela.
-      await gerarMiniaturaSeFaltar(admin, slot);
     } catch (err) {
       const msg = err instanceof MetaApiError || err instanceof Error ? err.message : "Erro desconhecido";
 
@@ -147,21 +135,4 @@ async function executar(req: NextRequest) {
     falhas: resultados.filter((r) => r.status === "error").length,
     detalhes: resultados,
   });
-}
-
-async function gerarMiniaturaSeFaltar(admin: ReturnType<typeof createAdminClient>, slot: ScheduleSlot) {
-  if (slot.thumbnail_data_url || slot.media_type !== "IMAGE") return;
-
-  try {
-    const res = await fetch(slot.media_url, { cache: "no-store" });
-    if (!res.ok) return;
-
-    const buffer = Buffer.from(await res.arrayBuffer());
-    const thumbnailDataUrl = await gerarThumbnailServidor(buffer);
-    if (!thumbnailDataUrl) return;
-
-    await admin.from("schedule_slots").update({ thumbnail_data_url: thumbnailDataUrl }).eq("id", slot.id);
-  } catch {
-    // Ignorado de propósito — ver comentário no ponto de chamada.
-  }
 }
