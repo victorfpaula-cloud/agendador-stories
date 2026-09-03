@@ -20,6 +20,7 @@ export interface ArquivoDrive {
   id: string;
   name: string;
   mimeType: string;
+  thumbnailLink?: string;
 }
 
 function base64url(input: Buffer | string): string {
@@ -158,9 +159,34 @@ export async function listarArquivosDaPasta(accessToken: string, pastaId: string
     accessToken,
     `files?q=${encodeURIComponent(
       q
-    )}&fields=files(id,name,mimeType)&orderBy=name&pageSize=100&supportsAllDrives=true&includeItemsFromAllDrives=true`
+    )}&fields=files(id,name,mimeType,thumbnailLink)&orderBy=name&pageSize=100&supportsAllDrives=true&includeItemsFromAllDrives=true`
   );
   return (json.files ?? []) as ArquivoDrive[];
+}
+
+// Baixa a miniatura pequena que o próprio Drive já gera pra foto e vídeo
+// (campo thumbnailLink) e devolve como data URL — evita que a tela de
+// Publicações precise carregar o arquivo original inteiro só pra desenhar
+// um preview de 48x48px (foi isso que estourou o Cached Egress do Supabase
+// em 02/09/2026, ver comentário em PublicacoesClient.tsx). Nunca lança
+// erro: se o arquivo não tiver thumbnailLink (raro) ou a busca falhar por
+// qualquer motivo, devolve null e quem chama segue sem miniatura — mesmo
+// comportamento "nunca trava o post por causa disso" do gerarThumbnail() do
+// navegador (ver src/lib/thumbnail.ts).
+export async function baixarThumbnailDrive(accessToken: string, thumbnailLink: string): Promise<string | null> {
+  try {
+    // "=s240" pede uma versão de até 240px no lado maior — mesmo teto usado
+    // no thumbnail gerado no navegador (TAMANHO_MAXIMO em thumbnail.ts).
+    const url = thumbnailLink.replace(/=s\d+$/, "") + "=s240";
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` }, cache: "no-store" });
+    if (!res.ok) return null;
+
+    const contentType = res.headers.get("content-type") || "image/jpeg";
+    const buffer = Buffer.from(await res.arrayBuffer());
+    return `data:${contentType};base64,${buffer.toString("base64")}`;
+  } catch {
+    return null;
+  }
 }
 
 // Baixa o conteúdo bruto (bytes) de um arquivo do Drive.
