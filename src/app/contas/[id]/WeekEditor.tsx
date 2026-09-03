@@ -5,6 +5,7 @@ import { useState } from "react";
 import { DIAS_SEMANA } from "@/lib/days";
 import { prepararImagem } from "@/lib/imagemCliente";
 import { enviarMidiaDireto } from "@/lib/uploadDireto";
+import { gerarThumbnail } from "@/lib/thumbnail";
 import type { ScheduleSlot } from "@/types/database";
 
 const BUCKET_STORIES = "story-media";
@@ -196,10 +197,11 @@ function LinhaSalva({
     try {
       const arquivoFinal = await prepararImagem(file);
       const media = await enviarMidiaDireto(arquivoFinal, { bucket: BUCKET_STORIES, pasta: slot.account_id });
+      const thumbnailDataUrl = await gerarThumbnail(arquivoFinal);
       const json = await chamarApi(`/api/slots/${slot.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ media }),
+        body: JSON.stringify({ media: { ...media, thumbnailDataUrl } }),
       });
       onAtualizar(json.slot);
     } catch (err) {
@@ -226,7 +228,7 @@ function LinhaSalva({
     <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5">
       <div className="flex items-center gap-2">
         {status && <BolinhaStatus status={status} />}
-        <MiniaturaMidia url={slot.media_url} tipo={slot.media_type} />
+        <MiniaturaMidia url={slot.media_url} tipo={slot.media_type} thumbnailDataUrl={slot.thumbnail_data_url} />
 
         <input
           type="time"
@@ -286,11 +288,12 @@ function LinhaNova({
     try {
       const arquivoFinal = await prepararImagem(file);
       const media = await enviarMidiaDireto(arquivoFinal, { bucket: BUCKET_STORIES, pasta: accountId });
+      const thumbnailDataUrl = await gerarThumbnail(arquivoFinal);
 
       const json = await chamarApi(`/api/accounts/${accountId}/slots`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ day_of_week: diaSemana, time_of_day: horario, media }),
+        body: JSON.stringify({ day_of_week: diaSemana, time_of_day: horario, media: { ...media, thumbnailDataUrl } }),
       });
       onSalvo(json.slot);
       setHorario("");
@@ -353,7 +356,27 @@ function BolinhaStatus({ status }: { status: StatusHoje }) {
   );
 }
 
-function MiniaturaMidia({ url, tipo }: { url: string; tipo: string }) {
+// Prioriza a miniatura pequena (evita carregar o arquivo original inteiro só
+// pra desenhar um quadradinho de 36x36px — foi exatamente isso que estourou
+// o Cached Egress do Supabase no módulo de Publicações, ver comentário em
+// PublicacoesClient.tsx). Diferente daquele módulo, aqui SEMPRE existe o
+// arquivo original pra cair como fallback (o Story se repete toda semana,
+// nunca é apagado) — então um horário criado antes dessa miniatura existir
+// continua mostrando a mídia normalmente, só um pouco mais pesada, até
+// alguém trocar a mídia dele de novo (aí a miniatura passa a existir).
+function MiniaturaMidia({
+  url,
+  tipo,
+  thumbnailDataUrl,
+}: {
+  url: string;
+  tipo: string;
+  thumbnailDataUrl: string | null;
+}) {
+  if (thumbnailDataUrl) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={thumbnailDataUrl} alt="" className="h-9 w-9 rounded-md object-cover" />;
+  }
   if (tipo === "VIDEO") {
     return <video src={url} className="h-9 w-9 rounded-md object-cover" muted />;
   }

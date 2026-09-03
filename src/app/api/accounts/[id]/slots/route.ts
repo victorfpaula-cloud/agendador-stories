@@ -19,7 +19,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const body = await req.json().catch(() => null);
   const diaSemana = Number(body?.day_of_week);
   const horario = String(body?.time_of_day || "");
-  const media = body?.media as { url?: string; path?: string; mediaType?: string } | undefined;
+  const media = body?.media as
+    | { url?: string; path?: string; mediaType?: string; thumbnailDataUrl?: string | null }
+    | undefined;
 
   if (!diaSemana || diaSemana < 1 || diaSemana > 7) {
     return NextResponse.json({ erro: "Dia da semana inválido." }, { status: 400 });
@@ -41,6 +43,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         media_url: media.url,
         media_path: media.path,
         media_type: media.mediaType as MediaType,
+        thumbnail_data_url: media.thumbnailDataUrl ?? null,
       })
       .select("*")
       .single();
