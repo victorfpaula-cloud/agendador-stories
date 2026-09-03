@@ -21,7 +21,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { slotId: st
   // A mídia já chega pronta no Storage (upload direto do navegador — ver
   // POST /api/accounts/[id]/slots para o motivo); essa rota só recebe a
   // referência, nunca o arquivo em si.
-  const media = body?.media as { url?: string; path?: string; mediaType?: string } | undefined;
+  const media = body?.media as
+    | { url?: string; path?: string; mediaType?: string; thumbnailDataUrl?: string | null }
+    | undefined;
 
   const atualizacao: Record<string, unknown> = {};
 
@@ -39,6 +41,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { slotId: st
     atualizacao.media_url = media.url;
     atualizacao.media_path = media.path;
     atualizacao.media_type = media.mediaType;
+    atualizacao.thumbnail_data_url = media.thumbnailDataUrl ?? null;
   }
 
   if (Object.keys(atualizacao).length === 0) {

@@ -26,6 +26,9 @@ create table if not exists public.schedule_slots (
   media_url text not null,
   media_path text not null,
   media_type text not null check (media_type in ('IMAGE','VIDEO')),
+  -- Miniatura pequena (preview) — ver supabase/schedule-slots-thumbnail.sql
+  -- pro contexto completo de por que existe.
+  thumbnail_data_url text,
   is_active boolean not null default true,
   created_at timestamptz not null default now()
 );
