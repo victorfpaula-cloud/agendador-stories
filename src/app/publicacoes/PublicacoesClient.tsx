@@ -385,11 +385,7 @@ function CardPost({
   return (
     <div className="flex items-start gap-3 rounded-xl2 bg-white p-3 shadow-sm ring-1 ring-slate-200">
       {midia && (
-        <MiniaturaMidia
-          url={midia.media_url}
-          thumbnailDataUrl={midia.thumbnail_data_url}
-          tipo={midia.media_type}
-        />
+        <MiniaturaMidia thumbnailDataUrl={midia.thumbnail_data_url} />
       )}
 
       <div className="min-w-0 flex-1">
@@ -519,11 +515,7 @@ function EditarPost({
     <div className="rounded-xl2 bg-white p-3 shadow-sm ring-2 ring-brand-300">
       <div className="flex items-start gap-3">
         {midia && (
-        <MiniaturaMidia
-          url={midia.media_url}
-          thumbnailDataUrl={midia.thumbnail_data_url}
-          tipo={midia.media_type}
-        />
+        <MiniaturaMidia thumbnailDataUrl={midia.thumbnail_data_url} />
       )}
         <p className="pt-1.5 text-xs text-slate-400">
           A mídia não dá pra trocar por aqui — só legenda, contas e horário. Pra trocar a mídia,
@@ -606,31 +598,19 @@ function EditarPost({
   );
 }
 
-// Prioridade de exibição: a miniatura pequena (gerada no navegador, guardada
-// pra sempre) primeiro — mais leve e continua existindo mesmo depois que o
-// arquivo original é apagado do Storage após a publicação. Se não tiver
-// miniatura (ex: post veio do Drive, que ainda não gera uma), cai pro
-// arquivo original enquanto ele ainda existir. Se nenhum dos dois existir
-// mais, mostra um quadradinho genérico em vez de ficar quebrado.
-function MiniaturaMidia({
-  url,
-  thumbnailDataUrl,
-  tipo,
-}: {
-  url: string | null;
-  thumbnailDataUrl: string | null;
-  tipo: string;
-}) {
+// Só mostra a miniatura pequena (gerada no navegador pro fluxo manual, ou
+// pelo próprio Google Drive pro fluxo automático — ver baixarThumbnailDrive
+// em src/lib/drive.ts). De propósito NUNCA cai pro arquivo original como
+// "preview": ele pode ter vários MB (foto em alta resolução, vídeo inteiro),
+// e usar isso só pra desenhar um quadradinho de 48x48px foi o que causou o
+// estouro de "Cached Egress" do Supabase em 02/09/2026 — cada abertura da
+// tela baixava o arquivo inteiro de novo, pra cada post sem miniatura. Sem
+// miniatura, mostra um quadradinho genérico — não é bonito, mas nunca
+// consome banda à toa.
+function MiniaturaMidia({ thumbnailDataUrl }: { thumbnailDataUrl: string | null }) {
   if (thumbnailDataUrl) {
     // eslint-disable-next-line @next/next/no-img-element
     return <img src={thumbnailDataUrl} alt="" className="h-12 w-12 shrink-0 rounded-md object-cover" />;
-  }
-  if (url) {
-    if (tipo === "VIDEO") {
-      return <video src={url} className="h-12 w-12 shrink-0 rounded-md object-cover" muted />;
-    }
-    // eslint-disable-next-line @next/next/no-img-element
-    return <img src={url} alt="" className="h-12 w-12 shrink-0 rounded-md object-cover" />;
   }
   return (
     <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-slate-100 text-slate-400">

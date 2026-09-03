@@ -77,11 +77,14 @@ export interface FeedPostMedia {
   media_url: string | null;
   media_path: string | null;
   media_type: MediaType;
-  // Miniatura pequena, gerada no navegador (ou null se não foi possível
-  // gerar) — guardada como data URL (texto) direto no banco, não como
-  // arquivo no Storage. É o que a tela mostra depois que o original é
-  // apagado, e some sozinha ~30 dias após a publicação (ver
-  // supabase/thumbnails.sql).
+  // Miniatura pequena (ou null se não foi possível gerar) — guardada como
+  // data URL (texto) direto no banco, não como arquivo no Storage. Gerada
+  // no navegador pro fluxo manual (gerarThumbnail, thumbnail.ts) ou pelo
+  // próprio Google Drive pro fluxo automático (baixarThumbnailDrive,
+  // drive.ts). É a ÚNICA coisa que a tela de Publicações usa pra desenhar o
+  // preview — nunca cai pro arquivo original, pra não gastar egress do
+  // Storage à toa (ver MiniaturaMidia em PublicacoesClient.tsx). Some
+  // sozinha ~30 dias após a publicação (ver supabase/thumbnails.sql).
   thumbnail_data_url: string | null;
   created_at: string;
 }

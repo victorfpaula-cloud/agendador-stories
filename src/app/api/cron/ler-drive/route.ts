@@ -5,6 +5,7 @@ import { enviarMidiaBuffer } from "@/lib/storage";
 import {
   NOMES_MES,
   baixarArquivoDrive,
+  baixarThumbnailDrive,
   encontrarSubpasta,
   extrairIdDaPasta,
   listarArquivosDaPasta,
@@ -153,13 +154,26 @@ async function executar(req: NextRequest) {
     }
 
     // Baixa cada mídia do Drive e sobe pro Storage do Supabase, na mesma
-    // ordem (vira a ordem do carrossel quando houver mais de uma).
-    const midiasEnviadas: { url: string; path: string; mediaType: "IMAGE" | "VIDEO" }[] = [];
+    // ordem (vira a ordem do carrossel quando houver mais de uma). Também
+    // baixa a miniatura pequena que o próprio Drive já gera pra cada
+    // arquivo — sem isso, a tela de Publicações não tinha nenhuma miniatura
+    // pra mostrar e caía num modo reserva que carregava o arquivo original
+    // inteiro só pra desenhar um preview de 48x48px (o que estourou o
+    // Cached Egress do Supabase — ver comentário em PublicacoesClient.tsx).
+    const midiasEnviadas: {
+      url: string;
+      path: string;
+      mediaType: "IMAGE" | "VIDEO";
+      thumbnailDataUrl: string | null;
+    }[] = [];
     for (const arquivo of midiasParaUsar) {
       const buffer = await baixarArquivoDrive(accessToken, arquivo.id);
       const tipo: "IMAGE" | "VIDEO" = arquivo.mimeType.startsWith("video/") ? "VIDEO" : "IMAGE";
       const enviado = await enviarMidiaBuffer(admin, "feed-media", "drive", buffer, arquivo.mimeType, arquivo.name);
-      midiasEnviadas.push({ url: enviado.url, path: enviado.path, mediaType: tipo });
+      const thumbnailDataUrl = arquivo.thumbnailLink
+        ? await baixarThumbnailDrive(accessToken, arquivo.thumbnailLink)
+        : null;
+      midiasEnviadas.push({ url: enviado.url, path: enviado.path, mediaType: tipo, thumbnailDataUrl });
     }
 
     const scheduledAt = new Date(`${dataISO}T${cfg.horario_publicacao}-03:00`).toISOString();
@@ -185,6 +199,7 @@ async function executar(req: NextRequest) {
         media_url: m.url,
         media_path: m.path,
         media_type: m.mediaType,
+        thumbnail_data_url: m.thumbnailDataUrl,
       }))
     );
 
