@@ -43,7 +43,13 @@ export default async function ContaPage({ params }: { params: { id: string } }) 
   // de mudar o horário), a última tentativa é a que "vence" e aparece na bolinha.
   const logsHoje: Record<string, "success" | "error"> = {};
   for (const log of (logs ?? []) as PublishLog[]) {
-    if (log.slot_id) logsHoje[log.slot_id] = log.status;
+    // "publishing" é só o instante entre reivindicar o horário e terminar de
+    // publicar — se a tela carregar bem nesse meio-tempo (raro, dura no
+    // máximo alguns segundos), trata como "ainda não tentou" em vez de
+    // quebrar a bolinha de status.
+    if (log.slot_id && (log.status === "success" || log.status === "error")) {
+      logsHoje[log.slot_id] = log.status;
+    }
   }
 
   return (

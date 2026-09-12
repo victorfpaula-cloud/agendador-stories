@@ -6,6 +6,7 @@ import { enviarEmail } from "@/lib/email";
 import type { Account, ScheduleSlot } from "@/types/database";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 // Tolerância: um slot é considerado "devido" se o horário marcado já passou
 // nos últimos TOLERANCIA_MINUTOS. Isso cobre atrasos do próprio agendador
@@ -67,19 +68,25 @@ async function executar(req: NextRequest) {
   for (const slot of devidos) {
     const conta = slot.accounts;
 
-    // Evita duplicidade: já existe uma publicação de SUCESSO pra esse slot nessa
-    // data? Se só existe erro, deixa tentar de novo — o cron roda a cada 5 min,
-    // então uma falha passageira (ex: o Instagram ainda processando a imagem)
-    // tem novas chances dentro da janela de tolerância, em vez de desistir de vez.
-    const { data: jaPublicado } = await admin
-      .from("publish_log")
-      .select("id")
-      .eq("slot_id", slot.id)
-      .eq("scheduled_for", dataISO)
-      .eq("status", "success")
-      .maybeSingle();
+    // Reivindica esse horário antes de publicar (função no banco, ver
+    // migração reivindicar_publicacao_function): só uma execução consegue
+    // "ganhar" o slot+dia por vez. Isso é essencial porque o Supabase
+    // (pg_net) às vezes desiste de esperar resposta dessa rota por timeout e
+    // manda a chamada de novo, enquanto a primeira ainda está publicando por
+    // trás — sem essa trava, as duas publicavam no Instagram (Story
+    // duplicado). O antigo "SELECT antes de publicar" não protegia contra
+    // isso: as duas chamadas viam "ainda não publiquei" ao mesmo tempo.
+    const { data: reivindicacao, error: erroReivindicar } = await admin
+      .rpc("reivindicar_publicacao", {
+        p_slot_id: slot.id,
+        p_account_id: conta.id,
+        p_scheduled_for: dataISO,
+      })
+      .single<{ reivindicado: boolean; primeira_tentativa: boolean }>();
 
-    if (jaPublicado) continue;
+    if (erroReivindicar || !reivindicacao?.reivindicado) continue;
+
+    const primeiraTentativa = reivindicacao.primeira_tentativa;
 
     try {
       const igMediaId = await publicarStory({
@@ -89,57 +96,28 @@ async function executar(req: NextRequest) {
         mediaType: slot.media_type,
       });
 
-      // upsert, não insert: já existe uma linha de ERRO de uma tentativa
-      // anterior de hoje (a tabela só permite uma linha por slot+dia). Com
-      // insert, essa chamada falhava por violar essa trava, o sucesso nunca
-      // ficava registrado, e o próximo ciclo do cron achava que ainda
-      // precisava tentar de novo — publicando o mesmo Story várias vezes.
       await admin
         .from("publish_log")
-        .upsert(
-          {
-            slot_id: slot.id,
-            account_id: conta.id,
-            scheduled_for: dataISO,
-            status: "success",
-            ig_media_id: igMediaId,
-            error_message: null,
-          },
-          { onConflict: "slot_id,scheduled_for" }
-        );
+        .update({ status: "success", ig_media_id: igMediaId, error_message: null })
+        .eq("slot_id", slot.id)
+        .eq("scheduled_for", dataISO);
 
       resultados.push({ slotId: slot.id, conta: conta.name, status: "success" });
     } catch (err) {
       const msg = err instanceof MetaApiError || err instanceof Error ? err.message : "Erro desconhecido";
 
-      // Já existe um erro registrado hoje pra esse horário? O cron roda a
-      // cada 5 min e tenta de novo dentro da janela de tolerância — sem essa
-      // checagem, uma falha persistente mandaria um e-mail a cada nova
-      // tentativa em vez de só na primeira.
-      const { data: erroAnterior } = await admin
-        .from("publish_log")
-        .select("id")
-        .eq("slot_id", slot.id)
-        .eq("scheduled_for", dataISO)
-        .eq("status", "error")
-        .maybeSingle();
-
       await admin
         .from("publish_log")
-        .upsert(
-          {
-            slot_id: slot.id,
-            account_id: conta.id,
-            scheduled_for: dataISO,
-            status: "error",
-            error_message: msg,
-          },
-          { onConflict: "slot_id,scheduled_for" }
-        );
+        .update({ status: "error", error_message: msg })
+        .eq("slot_id", slot.id)
+        .eq("scheduled_for", dataISO);
 
       resultados.push({ slotId: slot.id, conta: conta.name, status: "error", detalhe: msg });
 
-      if (!erroAnterior) {
+      // Só na primeira tentativa do dia pra esse horário — sem isso, uma
+      // falha persistente mandaria um e-mail a cada nova retentativa dentro
+      // da janela de tolerância, em vez de só uma vez.
+      if (primeiraTentativa) {
         await enviarEmail({
           assunto: `Erro ao publicar Story — ${conta.name}`,
           corpo:
