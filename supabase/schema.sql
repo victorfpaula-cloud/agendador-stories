@@ -42,7 +42,11 @@ create table if not exists public.publish_log (
   slot_id uuid references public.schedule_slots(id) on delete set null,
   account_id uuid references public.accounts(id) on delete set null,
   scheduled_for date not null,
-  status text not null check (status in ('success','error')),
+  -- 'publishing' é o estado transitório usado pela reivindicação atômica
+  -- (ver supabase/publish_log-reivindicacao-atomica.sql) — evita publicar o
+  -- mesmo Story duas vezes quando o cron é chamado mais de uma vez ao mesmo
+  -- tempo pra o mesmo horário.
+  status text not null check (status in ('success','error','publishing')),
   ig_media_id text,
   error_message text,
   created_at timestamptz not null default now(),
@@ -86,3 +90,7 @@ create policy "Leitura publica story-media"
 -- Módulo de Publicações no Feed/Reels (feed_posts e afins): schema separado,
 -- em supabase/feed-posts.sql — rode aquele arquivo também se for uma
 -- instalação nova do zero.
+
+-- Função reivindicar_publicacao (trava contra Story duplicado): rode
+-- supabase/publish_log-reivindicacao-atomica.sql também numa instalação
+-- nova do zero.

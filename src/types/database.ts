@@ -37,7 +37,11 @@ export interface PublishLog {
   slot_id: string | null;
   account_id: string | null;
   scheduled_for: string;
-  status: "success" | "error";
+  // "publishing" é só um estado transitório enquanto o cron reivindica o
+  // horário antes de publicar (ver reivindicar_publicacao no banco e
+  // /api/cron/run) — nunca deveria ficar assim por muito tempo nem aparecer
+  // pra quem lê essa tabela depois, mas o tipo existe porque a coluna aceita.
+  status: "success" | "error" | "publishing";
   ig_media_id: string | null;
   error_message: string | null;
   created_at: string;
