@@ -94,3 +94,7 @@ create policy "Leitura publica story-media"
 -- Função reivindicar_publicacao (trava contra Story duplicado): rode
 -- supabase/publish_log-reivindicacao-atomica.sql também numa instalação
 -- nova do zero.
+
+-- Tabela drive_lock + função reivindicar_ingestao_drive (mesma trava,
+-- agora pro robô do Drive): rode supabase/drive_lock-reivindicacao-atomica.sql
+-- também numa instalação nova do zero.

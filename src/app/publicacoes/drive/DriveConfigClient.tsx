@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import type { DriveConfig, DriveExecucao, DriveExecucaoResultado } from "@/types/database";
 
 // Mensagem amigável por resultado — pra Victor entender o que aconteceu na
@@ -76,6 +77,9 @@ export default function DriveConfigClient({
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [salvoEm, setSalvoEm] = useState<string | null>(null);
+  const [tentandoDeNovo, setTentandoDeNovo] = useState(false);
+  const [erroTentativa, setErroTentativa] = useState<string | null>(null);
+  const router = useRouter();
 
   function alternarConta(id: string) {
     setAccountIds((atual) => (atual.includes(id) ? atual.filter((x) => x !== id) : [...atual, id]));
@@ -112,6 +116,22 @@ export default function DriveConfigClient({
       setErro(err instanceof Error ? err.message : "Erro ao salvar a configuração.");
     } finally {
       setSalvando(false);
+    }
+  }
+
+  async function tentarDeNovo() {
+    setErroTentativa(null);
+    setTentandoDeNovo(true);
+    try {
+      await chamarApi("/api/drive-config/tentar-de-novo", { method: "POST" });
+      // A resposta já vem com o resultado, mas o mais simples e confiável é
+      // atualizar a página inteira: ela já sabe buscar e mostrar a última
+      // execução (e o post novo, se um tiver sido criado) direto do banco.
+      router.refresh();
+    } catch (err) {
+      setErroTentativa(err instanceof Error ? err.message : "Erro ao tentar de novo.");
+    } finally {
+      setTentandoDeNovo(false);
     }
   }
 
@@ -193,19 +213,32 @@ export default function DriveConfigClient({
         {salvoEm && !erro && <p className="text-xs text-green-600">Configuração salva ({salvoEm}).</p>}
 
         <div className="border-t border-slate-100 pt-3">
-          <span className="mb-1 block text-xs font-medium text-slate-500">Última verificação do Drive</span>
-          {ultimaExecucao ? (
-            <p className={`text-xs ${EXECUCAO_INFO[ultimaExecucao.resultado].cor}`}>
-              {formatarDataHora(ultimaExecucao.executado_em)} — {EXECUCAO_INFO[ultimaExecucao.resultado].texto}
-              {ultimaExecucao.resultado === "erro" && ultimaExecucao.detalhe && (
-                <span className="mt-0.5 block text-slate-500">{ultimaExecucao.detalhe}</span>
-              )}
-            </p>
-          ) : (
-            <p className="text-xs text-slate-400">
-              Ainda não rodou nenhuma vez. O robô confere o Drive automaticamente todo dia às 11h.
-            </p>
-          )}
+          <div className="flex items-center justify-between gap-2">
+            <span className="block text-xs font-medium text-slate-500">Última verificação do Drive</span>
+            <button
+              type="button"
+              onClick={tentarDeNovo}
+              disabled={tentandoDeNovo}
+              className="shrink-0 rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-500 hover:border-brand-300 hover:text-brand-600 disabled:opacity-60"
+            >
+              {tentandoDeNovo ? "Tentando…" : "↻ Tentar de novo agora"}
+            </button>
+          </div>
+          <div className="mt-1">
+            {ultimaExecucao ? (
+              <p className={`text-xs ${EXECUCAO_INFO[ultimaExecucao.resultado].cor}`}>
+                {formatarDataHora(ultimaExecucao.executado_em)} — {EXECUCAO_INFO[ultimaExecucao.resultado].texto}
+                {ultimaExecucao.resultado === "erro" && ultimaExecucao.detalhe && (
+                  <span className="mt-0.5 block text-slate-500">{ultimaExecucao.detalhe}</span>
+                )}
+              </p>
+            ) : (
+              <p className="text-xs text-slate-400">
+                Ainda não rodou nenhuma vez. O robô confere o Drive automaticamente todo dia às 11h.
+              </p>
+            )}
+            {erroTentativa && <p className="mt-1 text-xs text-red-600">{erroTentativa}</p>}
+          </div>
         </div>
       </div>
     </div>
