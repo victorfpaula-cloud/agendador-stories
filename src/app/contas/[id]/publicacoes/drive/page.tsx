@@ -2,16 +2,18 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Account, DriveConfig, DriveExecucao } from "@/types/database";
+import ContaTabs from "../../ContaTabs";
 import DriveConfigClient from "./DriveConfigClient";
 
 // Sub-módulo do Drive (passo 6 = configuração, passo 7 = o robô de verdade)
 // — desde o redesign de 16/09/2026, a automação vale só pra essa conta
-// (drive_config tem uma linha por account_id). Se algo aqui quebrar, não
-// afeta em nada as outras contas nem o motor de publicação — só essa
-// telinha fica indisponível. O robô roda 1x por dia (ver
-// supabase/drive-cron.sql) pra cada conta configurada e registra o
-// resultado em `drive_execucoes`, mostrado embaixo do formulário pra Victor
-// acompanhar sem precisar olhar log nenhum da Vercel.
+// (drive_config tem uma linha por account_id) e tem sua própria aba (ver
+// ContaTabs), separada de Publicações — é uma configuração à parte, não um
+// post avulso. Se algo aqui quebrar, não afeta em nada as outras contas nem
+// o motor de publicação — só essa telinha fica indisponível. O robô roda 1x
+// por dia (ver supabase/drive-cron.sql) pra cada conta configurada e
+// registra o resultado em `drive_execucoes`, mostrado embaixo do formulário
+// pra Victor acompanhar sem precisar olhar log nenhum da Vercel.
 export const dynamic = "force-dynamic";
 
 export default async function DriveConfigDaContaPage({ params }: { params: { id: string } }) {
@@ -36,17 +38,17 @@ export default async function DriveConfigDaContaPage({ params }: { params: { id:
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
-      <div className="mb-8">
-        <Link href={`/contas/${params.id}/publicacoes`} className="text-sm text-slate-500 hover:underline">
-          ← Publicações
+      <div className="mb-4">
+        <Link href="/contas" className="text-sm text-slate-500 hover:underline">
+          ← Todas as contas
         </Link>
-        <h1 className="mt-1 text-2xl font-semibold text-slate-900">
-          Automação do Drive — {(conta as Account).name}
-        </h1>
+        <h1 className="mt-1 text-2xl font-semibold text-slate-900">{(conta as Account).name}</h1>
         <p className="text-sm text-slate-500">
           O robô confere a pasta do dia uma vez por dia (às 11h) e cria o post automaticamente pra essa conta.
         </p>
       </div>
+
+      <ContaTabs accountId={params.id} />
 
       {error && (
         <div className="mb-6 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 ring-1 ring-red-200">

@@ -4,18 +4,22 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 // Navegação em abas dentro de uma conta — Stories (rotina semanal, URL
-// permanece a mesma de sempre: /contas/[id]) e Publicações (feed/Reels/
-// carrossel + automação do Drive, agora vivendo dentro da própria conta em
-// vez de telas globais soltas). A aba de Publicações fica "ativa" tanto na
-// tela normal quanto na de configuração do Drive, já que ela é uma
-// sub-tela de Publicações.
+// permanece a mesma de sempre: /contas/[id]), Agendamento de Publicações
+// (feed/Reels/carrossel) e Automação do Drive, cada uma na sua própria
+// aba/URL, todas vivendo dentro da própria conta em vez de telas globais
+// soltas. Drive tem sua própria aba (em vez de ficar escondido dentro de
+// Publicações) porque é uma configuração à parte, não um post — clicar nela
+// já abre a configuração direto.
 export default function ContaTabs({ accountId }: { accountId: string }) {
   const pathname = usePathname();
-  const emPublicacoes = pathname?.startsWith(`/contas/${accountId}/publicacoes`);
+  const base = `/contas/${accountId}`;
+  const emDrive = pathname?.startsWith(`${base}/publicacoes/drive`);
+  const emPublicacoes = pathname?.startsWith(`${base}/publicacoes`) && !emDrive;
 
   const abas = [
-    { href: `/contas/${accountId}`, label: "Stories", ativo: !emPublicacoes },
-    { href: `/contas/${accountId}/publicacoes`, label: "Publicações", ativo: !!emPublicacoes },
+    { href: base, label: "Stories", ativo: !emPublicacoes && !emDrive },
+    { href: `${base}/publicacoes`, label: "Agendamento de Publicações", ativo: !!emPublicacoes },
+    { href: `${base}/publicacoes/drive`, label: "Automação do Drive", ativo: !!emDrive },
   ];
 
   return (
