@@ -13,38 +13,43 @@ import {
 import { extrairTextoPdf } from "@/lib/drivePdf";
 import type { DriveConfig } from "@/types/database";
 
-// Lê a pasta do dia no Google Drive e cria o post automático — lógica
-// compartilhada entre o cron diário (/api/cron/ler-drive, roda sozinho às
-// 11h) e o botão "Tentar de novo agora" da telinha de configuração
-// (/api/drive-config/tentar-de-novo, chamado pelo Victor quando o robô
-// falha). Ver histórico completo do porquê em ambas as rotas.
+// Lê a pasta do dia no Google Drive e cria o post automático de uma conta —
+// lógica compartilhada entre o cron diário (/api/cron/ler-drive, roda
+// sozinho às 11h, uma vez por conta configurada) e o botão "Tentar de novo
+// agora" da aba Publicações > Drive de cada conta
+// (/api/accounts/[id]/drive-config/tentar-de-novo, chamado pelo Victor
+// quando o robô falha). Ver histórico completo do porquê em ambas as rotas.
 export type ResultadoDrive = "sem_config" | "sem_pasta" | "ja_existe" | "post_criado" | "erro";
 
 async function registrarExecucao(
   admin: ReturnType<typeof createAdminClient>,
+  accountId: string,
   resultado: ResultadoDrive,
   detalhe: string | null,
   feedPostId: string | null
 ) {
-  await admin.from("drive_execucoes").insert({ resultado, detalhe, feed_post_id: feedPostId });
+  await admin.from("drive_execucoes").insert({ account_id: accountId, resultado, detalhe, feed_post_id: feedPostId });
 }
 
 export async function executarLeituraDrive(
-  admin: ReturnType<typeof createAdminClient>
+  admin: ReturnType<typeof createAdminClient>,
+  accountId: string
 ): Promise<{ resultado: ResultadoDrive; detalhe?: string; postId?: string }> {
   const { dataISO } = agoraEmSaoPaulo();
 
-  // Reivindica o dia antes de tocar em qualquer coisa (função no banco, ver
-  // migração drive_lock_reivindicacao). Achado em 13/09/2026: o Supabase
-  // (pg_net) desiste de esperar resposta dessa rota em só 5s e, quando isso
-  // acontece, manda a MESMA chamada de novo — confirmado, 4 tentativas
-  // quase simultâneas pra um único disparo do cron. Sem essa trava, duas
-  // execuções concorrentes podiam criar dois posts duplicados a partir do
-  // Drive no mesmo dia (mesmo bug que já causou Story duplicado — ver
-  // reivindicar_publicacao). Também cobre o botão manual: clicar "tentar de
-  // novo" duas vezes seguidas não cria dois posts.
+  // Reivindica o dia (por conta) antes de tocar em qualquer coisa (função no
+  // banco, ver migração drive_lock_reivindicacao / drive_config_por_conta).
+  // Achado em 13/09/2026: o Supabase (pg_net) desiste de esperar resposta
+  // dessa rota em só 5s e, quando isso acontece, manda a MESMA chamada de
+  // novo — confirmado, 4 tentativas quase simultâneas pra um único disparo
+  // do cron. Sem essa trava, duas execuções concorrentes podiam criar dois
+  // posts duplicados a partir do Drive no mesmo dia (mesmo bug que já
+  // causou Story duplicado — ver reivindicar_publicacao). Também cobre o
+  // botão manual: clicar "tentar de novo" duas vezes seguidas não cria dois
+  // posts. A trava é por (conta, dia): a automação de uma conta não bloqueia
+  // a de outra no mesmo dia.
   const { data: reivindicacao } = await admin
-    .rpc("reivindicar_ingestao_drive", { p_dia: dataISO })
+    .rpc("reivindicar_ingestao_drive", { p_account_id: accountId, p_dia: dataISO })
     .single<{ reivindicado: boolean }>();
 
   if (!reivindicacao?.reivindicado) {
@@ -60,41 +65,44 @@ export async function executarLeituraDrive(
   // configuração, o botão "tentar de novo" (ou o cron de amanhã) precisa
   // conseguir reivindicar o dia de novo.
   async function finalizar(resultado: ResultadoDrive, detalhe: string | null, feedPostId: string | null) {
-    await registrarExecucao(admin, resultado, detalhe, feedPostId);
+    await registrarExecucao(admin, accountId, resultado, detalhe, feedPostId);
     await admin
       .from("drive_lock")
       .update({ status: resultado === "post_criado" ? "sucesso" : "erro" })
+      .eq("account_id", accountId)
       .eq("dia", dataISO);
   }
 
   try {
-    const { data: config } = await admin.from("drive_config").select("*").eq("id", 1).maybeSingle();
+    const { data: config } = await admin.from("drive_config").select("*").eq("account_id", accountId).maybeSingle();
     const cfg = config as DriveConfig | null;
 
-    if (!cfg?.pasta_drive_id || !cfg.account_ids || cfg.account_ids.length === 0) {
-      await finalizar("sem_config", "Falta configurar a pasta do Drive e/ou as contas-alvo.", null);
+    if (!cfg?.pasta_drive_id) {
+      await finalizar("sem_config", "Falta configurar a pasta do Drive dessa conta.", null);
       return { resultado: "sem_config" };
     }
 
     const [, mesStr, diaStr] = dataISO.split("-");
     const mes = Number(mesStr);
 
-    // Já existe post automático criado hoje? Rede de segurança além da
-    // reivindicação acima (ex: um post foi criado com sucesso mas por
-    // algum motivo o drive_lock não ficou marcado como 'sucesso').
+    // Já existe post automático criado hoje pra essa conta? Rede de
+    // segurança além da reivindicação acima (ex: um post foi criado com
+    // sucesso mas por algum motivo o drive_lock não ficou marcado como
+    // 'sucesso').
     const inicioDiaUTC = new Date(`${dataISO}T00:00:00-03:00`).toISOString();
     const fimDiaUTC = new Date(`${dataISO}T23:59:59-03:00`).toISOString();
     const { data: jaExiste } = await admin
       .from("feed_posts")
-      .select("id")
+      .select("id, feed_post_accounts!inner(account_id)")
       .eq("source", "drive")
+      .eq("feed_post_accounts.account_id", accountId)
       .gte("scheduled_at", inicioDiaUTC)
       .lte("scheduled_at", fimDiaUTC)
       .maybeSingle();
 
     if (jaExiste) {
-      await admin.from("drive_lock").update({ status: "sucesso" }).eq("dia", dataISO);
-      await registrarExecucao(admin, "ja_existe", "Já existe um post automático do Drive criado hoje.", jaExiste.id);
+      await admin.from("drive_lock").update({ status: "sucesso" }).eq("account_id", accountId).eq("dia", dataISO);
+      await registrarExecucao(admin, accountId, "ja_existe", "Já existe um post automático do Drive criado hoje.", jaExiste.id);
       return { resultado: "ja_existe", postId: jaExiste.id };
     }
 
@@ -210,22 +218,21 @@ export async function executarLeituraDrive(
       throw new Error(erroMedia.message);
     }
 
-    // Confere quais contas-alvo configuradas ainda existem de verdade
-    // (defensivo — a config pode ter sido salva há um tempo e alguma conta
-    // pode ter sido removida desde então).
-    const { data: contasEncontradas } = await admin.from("accounts").select("id").in("id", cfg.account_ids);
-    const accountIdsValidos = (contasEncontradas ?? []).map((c: { id: string }) => c.id);
+    // Confere se a conta configurada ainda existe de verdade (defensivo — a
+    // config pode ter sido salva há um tempo e a conta pode ter sido
+    // removida desde então).
+    const { data: contaEncontrada } = await admin.from("accounts").select("id").eq("id", accountId).maybeSingle();
 
-    if (accountIdsValidos.length === 0) {
+    if (!contaEncontrada) {
       await admin.from("feed_posts").delete().eq("id", post.id);
-      const detalhe = "Nenhuma das contas-alvo configuradas existe mais.";
+      const detalhe = "A conta configurada pro Drive não existe mais.";
       await finalizar("erro", detalhe, null);
       return { resultado: "erro", detalhe };
     }
 
     const { error: erroContas } = await admin
       .from("feed_post_accounts")
-      .insert(accountIdsValidos.map((accountId) => ({ feed_post_id: post.id, account_id: accountId })));
+      .insert({ feed_post_id: post.id, account_id: accountId });
 
     if (erroContas) {
       await admin.from("feed_posts").delete().eq("id", post.id);

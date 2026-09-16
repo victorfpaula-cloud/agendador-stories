@@ -5,6 +5,7 @@ import { agoraEmSaoPaulo } from "@/lib/days";
 import type { Account, PublishLog, ScheduleSlot } from "@/types/database";
 import WeekEditor from "./WeekEditor";
 import DuplicarRotina from "./DuplicarRotina";
+import ContaTabs from "./ContaTabs";
 
 export const dynamic = "force-dynamic";
 
@@ -79,6 +80,8 @@ export default async function ContaPage({ params }: { params: { id: string } }) 
           Reconectar
         </a>
       </div>
+
+      <ContaTabs accountId={(conta as Account).id} />
 
       <WeekEditor
         accountId={(conta as Account).id}

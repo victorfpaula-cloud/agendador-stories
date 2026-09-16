@@ -9,7 +9,7 @@ import type { DriveConfig, DriveExecucao, DriveExecucaoResultado } from "@/types
 // 'sem_pasta' e 'ja_existe' não são erro (dia sem post, ou post do dia já
 // tinha sido criado antes) — só 'erro' de fato é destacado em vermelho.
 const EXECUCAO_INFO: Record<DriveExecucaoResultado, { texto: string; cor: string }> = {
-  sem_config: { texto: "Configuração incompleta — falta a pasta do Drive e/ou as contas-alvo.", cor: "text-amber-600" },
+  sem_config: { texto: "Configuração incompleta — falta a pasta do Drive.", cor: "text-amber-600" },
   sem_pasta: { texto: "Nenhuma pasta encontrada pra esse dia — sem post hoje, normal.", cor: "text-slate-500" },
   ja_existe: { texto: "O post de hoje já tinha sido criado antes — nada duplicado.", cor: "text-slate-500" },
   post_criado: { texto: "Post criado com sucesso a partir do Drive.", cor: "text-green-600" },
@@ -58,14 +58,12 @@ function paraCampoHorario(horario: string): string {
   return horario.slice(0, 5);
 }
 
-type Conta = { id: string; name: string; ig_username: string | null };
-
 export default function DriveConfigClient({
-  accounts,
+  accountId,
   initialConfig,
   ultimaExecucao,
 }: {
-  accounts: Conta[];
+  accountId: string;
   initialConfig: DriveConfig | null;
   ultimaExecucao: DriveExecucao | null;
 }) {
@@ -73,17 +71,12 @@ export default function DriveConfigClient({
   const [horario, setHorario] = useState(
     initialConfig ? paraCampoHorario(initialConfig.horario_publicacao) : "12:00"
   );
-  const [accountIds, setAccountIds] = useState<string[]>(initialConfig?.account_ids ?? []);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [salvoEm, setSalvoEm] = useState<string | null>(null);
   const [tentandoDeNovo, setTentandoDeNovo] = useState(false);
   const [erroTentativa, setErroTentativa] = useState<string | null>(null);
   const router = useRouter();
-
-  function alternarConta(id: string) {
-    setAccountIds((atual) => (atual.includes(id) ? atual.filter((x) => x !== id) : [...atual, id]));
-  }
 
   async function salvar() {
     setErro(null);
@@ -96,13 +89,12 @@ export default function DriveConfigClient({
 
     setSalvando(true);
     try {
-      await chamarApi("/api/drive-config", {
+      await chamarApi(`/api/accounts/${accountId}/drive-config`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           pastaDriveId,
           horarioPublicacao: horario,
-          accountIds,
         }),
       });
       setSalvoEm(
@@ -123,7 +115,7 @@ export default function DriveConfigClient({
     setErroTentativa(null);
     setTentandoDeNovo(true);
     try {
-      await chamarApi("/api/drive-config/tentar-de-novo", { method: "POST" });
+      await chamarApi(`/api/accounts/${accountId}/drive-config/tentar-de-novo`, { method: "POST" });
       // A resposta já vem com o resultado, mas o mais simples e confiável é
       // atualizar a página inteira: ela já sabe buscar e mostrar a última
       // execução (e o post novo, se um tiver sido criado) direto do banco.
@@ -167,38 +159,6 @@ export default function DriveConfigClient({
             Horário em que o post do dia (achado no Drive) é publicado.
           </span>
         </label>
-
-        <div>
-          <span className="mb-1 block text-xs font-medium text-slate-500">
-            Contas-alvo ({accountIds.length === 0 ? "nenhuma selecionada" : `${accountIds.length} selecionada(s)`})
-          </span>
-          <div className="max-h-40 space-y-0.5 overflow-y-auto rounded-md border border-slate-300 p-1.5">
-            {accounts.length === 0 && (
-              <p className="px-1.5 py-1 text-xs text-slate-400">Nenhuma conta ativa disponível.</p>
-            )}
-            {accounts.map((conta) => (
-              <label
-                key={conta.id}
-                className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1.5 text-sm hover:bg-slate-50"
-              >
-                <input
-                  type="checkbox"
-                  checked={accountIds.includes(conta.id)}
-                  onChange={() => alternarConta(conta.id)}
-                  disabled={salvando}
-                  className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
-                />
-                <span className="text-slate-700">
-                  {conta.name}
-                  {conta.ig_username ? ` (@${conta.ig_username})` : ""}
-                </span>
-              </label>
-            ))}
-          </div>
-          <span className="mt-1 block text-xs text-slate-400">
-            Pra quais contas o post automático do dia vai — na prática, só as da Dona Baunilha.
-          </span>
-        </div>
 
         <button
           type="button"

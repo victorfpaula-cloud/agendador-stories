@@ -78,9 +78,11 @@ type Conta = { id: string; name: string; ig_username: string | null };
 
 export default function PublicacoesClient({
   accounts,
+  defaultAccountId,
   initialPosts,
 }: {
   accounts: Conta[];
+  defaultAccountId?: string;
   initialPosts: FeedPostComDetalhes[];
 }) {
   const [posts, setPosts] = useState<FeedPostComDetalhes[]>(initialPosts);
@@ -105,7 +107,7 @@ export default function PublicacoesClient({
 
   return (
     <div className="space-y-8">
-      <ComporPost accounts={accounts} onCriado={aoCriar} />
+      <ComporPost accounts={accounts} defaultAccountId={defaultAccountId} onCriado={aoCriar} />
 
       <div>
         <h2 className="mb-3 text-sm font-semibold text-slate-700">Agendadas</h2>
@@ -133,14 +135,19 @@ export default function PublicacoesClient({
 
 function ComporPost({
   accounts,
+  defaultAccountId,
   onCriado,
 }: {
   accounts: Conta[];
+  defaultAccountId?: string;
   onCriado: (post: FeedPostComDetalhes) => void;
 }) {
   const [files, setFiles] = useState<File[]>([]);
   const [caption, setCaption] = useState("");
-  const [accountIds, setAccountIds] = useState<string[]>([]);
+  // Pré-marca a conta atual (quem entrou por dentro da conta X já quer mandar
+  // pra X por padrão), mas continua dando pra marcar outras — broadcast
+  // continua existindo, só a entrada mudou (ver PublicacoesDaContaPage).
+  const [accountIds, setAccountIds] = useState<string[]>(defaultAccountId ? [defaultAccountId] : []);
   const [dataHora, setDataHora] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [progresso, setProgresso] = useState<string | null>(null);
@@ -207,7 +214,7 @@ function ComporPost({
       onCriado(json.post);
       setFiles([]);
       setCaption("");
-      setAccountIds([]);
+      setAccountIds(defaultAccountId ? [defaultAccountId] : []);
       setDataHora("");
     } catch (err) {
       setErro(err instanceof Error ? err.message : "Erro ao agendar a publicação.");

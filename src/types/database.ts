@@ -122,22 +122,22 @@ export interface FeedPostComDetalhes extends FeedPost {
   feed_post_accounts: (FeedPostAccount & { accounts: Pick<Account, "id" | "name" | "ig_username"> })[];
 }
 
-// Configuração do sub-módulo do Drive (passo 6) — linha única (id sempre 1).
-// Editável pela tela, sem precisar mexer em código quando a pasta ou o
-// horário mudar. account_ids é a lista de contas-alvo do post automático do
-// dia (na prática, só as contas da Dona Baunilha).
+// Configuração do sub-módulo do Drive (passo 6) — uma linha por conta
+// (account_id é a chave primária, ver supabase/drive_config-por-conta.sql).
+// Editável pela tela de Publicações > Drive de cada conta, sem precisar
+// mexer em código quando a pasta ou o horário mudar.
 export interface DriveConfig {
-  id: number;
+  account_id: string;
   pasta_drive_id: string | null;
   horario_publicacao: string; // "HH:MM:SS"
-  account_ids: string[];
   updated_at: string;
 }
 
 // Um registro do que aconteceu na última vez (ou nas últimas vezes) que o
 // cron diário do Drive rodou (passo 7) — pra Victor conseguir ver o
 // resultado direto na telinha de configuração, sem precisar olhar log
-// nenhum da Vercel.
+// nenhum da Vercel. account_id fica null em registros antigos, de antes da
+// automação virar por conta.
 export type DriveExecucaoResultado = "sem_config" | "sem_pasta" | "ja_existe" | "post_criado" | "erro";
 
 export interface DriveExecucao {
@@ -146,5 +146,6 @@ export interface DriveExecucao {
   resultado: DriveExecucaoResultado;
   detalhe: string | null;
   feed_post_id: string | null;
+  account_id: string | null;
   created_at: string;
 }
