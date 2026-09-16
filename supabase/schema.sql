@@ -98,3 +98,9 @@ create policy "Leitura publica story-media"
 -- Tabela drive_lock + função reivindicar_ingestao_drive (mesma trava,
 -- agora pro robô do Drive): rode supabase/drive_lock-reivindicacao-atomica.sql
 -- também numa instalação nova do zero.
+
+-- drive_config passou de uma linha única (id=1, mirando várias contas) pra
+-- uma linha por conta (account_id como chave primária) — a automação do
+-- Drive agora é configurada dentro de cada conta, não mais numa tela
+-- global. Rode supabase/drive_config-por-conta.sql também numa instalação
+-- nova do zero (nela já cria a tabela com o formato novo direto).

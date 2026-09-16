@@ -1,17 +1,23 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { FeedPostComDetalhes } from "@/types/database";
+import type { Account, FeedPostComDetalhes } from "@/types/database";
+import ContaTabs from "../ContaTabs";
 import PublicacoesClient from "./PublicacoesClient";
 
-// Aba nova, separada da grade semanal de Stories: publicações avulsas
-// agendadas no feed, Reels e carrossel. Passo 2: fluxo manual mínimo (1
-// mídia, 1 conta, legenda, data/hora) já publicando de verdade via o cron
-// próprio em /api/cron/publicar-feed. Broadcast pra várias contas, Reels e
-// carrossel chegam nos próximos passos. Não mexe em nada do motor de Stories.
+// Publicações (feed/Reels/carrossel) dessa conta — parte do redesign que
+// tirou Publicações de uma tela global solta e colocou dentro de cada
+// conta, como aba irmã de Stories (ver ContaTabs). O broadcast pra várias
+// contas de uma vez continua existindo (não mudou), só a entrada mudou: ao
+// abrir por aqui, a conta atual já vem pré-marcada, mas dá pra marcar
+// outras também.
 export const dynamic = "force-dynamic";
 
-export default async function PublicacoesPage() {
+export default async function PublicacoesDaContaPage({ params }: { params: { id: string } }) {
   const admin = createAdminClient();
+
+  const { data: conta } = await admin.from("accounts").select("*").eq("id", params.id).maybeSingle();
+  if (!conta) notFound();
 
   const { data: contas } = await admin
     .from("accounts")
@@ -21,7 +27,8 @@ export default async function PublicacoesPage() {
 
   const { data: posts, error } = await admin
     .from("feed_posts")
-    .select("*, feed_post_media(*), feed_post_accounts(*, accounts(id, name, ig_username))")
+    .select("*, feed_post_media(*), feed_post_accounts!inner(*, accounts(id, name, ig_username))")
+    .eq("feed_post_accounts.account_id", params.id)
     .order("scheduled_at", { ascending: true });
 
   return (
@@ -30,14 +37,14 @@ export default async function PublicacoesPage() {
         <Link href="/contas" className="text-sm text-slate-500 hover:underline">
           ← Todas as contas
         </Link>
-        <h1 className="mt-1 text-2xl font-semibold text-slate-900">Publicações</h1>
-        <p className="text-sm text-slate-500">
-          Feed, Reels e carrossel — agendamento avulso, separado da rotina semanal de Stories.
-        </p>
+        <h1 className="mt-1 text-2xl font-semibold text-slate-900">{(conta as Account).name}</h1>
+        <p className="text-sm text-slate-500">Feed, Reels e carrossel — agendamento avulso.</p>
       </div>
 
+      <ContaTabs accountId={(conta as Account).id} />
+
       <Link
-        href="/publicacoes/drive"
+        href={`/contas/${(conta as Account).id}/publicacoes/drive`}
         className="group mb-8 flex items-center gap-3 rounded-xl2 bg-white p-4 shadow-sm ring-1 ring-slate-200 transition hover:ring-teal-300"
       >
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-teal-50 text-teal-600 group-hover:bg-teal-100">
@@ -63,6 +70,7 @@ export default async function PublicacoesPage() {
 
       <PublicacoesClient
         accounts={contas ?? []}
+        defaultAccountId={(conta as Account).id}
         initialPosts={(posts ?? []) as FeedPostComDetalhes[]}
       />
     </main>
