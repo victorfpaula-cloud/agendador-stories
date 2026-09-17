@@ -229,7 +229,7 @@ export default function StoryDriveConfigClient({
                 </p>
               ) : (
                 <p className="text-xs text-slate-400">
-                  Ainda não rodou nenhuma vez. O robô confere o Drive automaticamente todo dia às 9h.
+                  Ainda não rodou nenhuma vez. O robô confere o Drive automaticamente a cada 30 minutos.
                 </p>
               )}
               {erroTentativa && <p className="mt-1 text-xs text-red-600">{erroTentativa}</p>}

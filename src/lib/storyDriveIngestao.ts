@@ -22,8 +22,9 @@ import type { StoryDriveConfig } from "@/types/database";
 //     mês no meio.
 //   * sem legenda, sem filtrar arquivo por nome (Victor confirmou que
 //     podem vir outros arquivos misturados na mesma pasta).
-// Compartilhada entre o cron diário (/api/cron/ler-stories-drive, roda
-// sozinho às 9h) e o botão "Tentar de novo agora"
+// Compartilhada entre o cron (/api/cron/ler-stories-drive, roda sozinho a
+// cada 30 min — ver comentário na rota pro porquê de não ser 1x/dia) e o
+// botão "Tentar de novo agora"
 // (/api/accounts/[id]/story-drive-config/tentar-de-novo).
 export type ResultadoStoryDrive = "sem_config" | "sem_pasta" | "sem_horario" | "ja_existe" | "stories_criados" | "erro";
 

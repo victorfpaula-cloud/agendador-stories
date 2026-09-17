@@ -1,0 +1,27 @@
+-- Pedido do Victor em 17/09/2026: o AutoStory conferia a pasta do Drive só
+-- 1x por dia (9h) — se ele adicionasse um arquivo novo depois disso, só
+-- virava Story no dia seguinte (a menos que clicasse em "Tentar de novo
+-- agora" manualmente). Pediu pra rodar de 30 em 30 min, ou de hora em hora.
+--
+-- Isso é seguro e barato de fazer porque:
+--   * A ingestão é idempotente por posição/horário desde a correção de
+--     "Tentar de novo agora" (ver story-drive-permite-rodar-de-novo.sql) —
+--     rodar de novo só cria o que ainda não existe, nunca duplica.
+--   * Quem dispara essa rota é o pg_cron do Supabase via HTTP comum, não o
+--     cron nativo da Vercel — então o limite de 1x/dia do plano Hobby da
+--     Vercel pra crons nativos nem se aplica aqui (mesmo truque usado nos
+--     outros crons do projeto, ver supabase/cron.sql).
+--   * Na maioria das execuções, não vai ter nada novo — o robô só confere a
+--     pasta e volta rápido, sem baixar nem subir nada.
+--
+-- Só mudou o intervalo do job já existente (jobid 8, "ler-stories-drive-
+-- diario" — o nome ficou desatualizado mas o pg_cron não permite renomear
+-- via alter_job, só schedule/command/database/username/active). Já aplicado
+-- direto no projeto via Supabase MCP — este arquivo é só o registro.
+--
+-- select cron.alter_job(job_id := 8, schedule := '*/30 * * * *');
+--
+-- O AutoFeed (Drive do Feed) continua 1x por dia de propósito — lá um post
+-- agrupa TODOS os arquivos do dia num carrossel único, então rodar de novo
+-- criaria um segundo post duplicado com o mesmo conteúdo (ver comentário em
+-- story-drive-permite-rodar-de-novo.sql).
