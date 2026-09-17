@@ -47,6 +47,28 @@ export default async function ContasPage({
     if (log.status === "error") resumoHoje[log.account_id].erros += 1;
   }
 
+  // Quantos Stories automáticos do Drive já saíram hoje, por conta — só
+  // aparece o card pras contas que têm essa automação configurada (evita
+  // mostrar "0" pra quem nem usa esse recurso).
+  const { data: storyDriveConfigs } = await admin.from("story_drive_config").select("account_id");
+  const inicioDiaUTC = new Date(`${dataISO}T00:00:00-03:00`).toISOString();
+  const fimDiaUTC = new Date(`${dataISO}T23:59:59-03:00`).toISOString();
+  const { data: storiesHojeData } = await admin
+    .from("story_posts")
+    .select("account_id, status")
+    .gte("scheduled_at", inicioDiaUTC)
+    .lte("scheduled_at", fimDiaUTC);
+
+  const storiesAutomaticosHoje: Record<string, number> = {};
+  for (const { account_id } of (storyDriveConfigs ?? []) as { account_id: string }[]) {
+    storiesAutomaticosHoje[account_id] = 0;
+  }
+  for (const s of (storiesHojeData ?? []) as { account_id: string; status: string }[]) {
+    if (s.status === "success" && storiesAutomaticosHoje[s.account_id] !== undefined) {
+      storiesAutomaticosHoje[s.account_id] += 1;
+    }
+  }
+
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
       <div className="mb-8 flex items-center justify-between">
@@ -65,7 +87,12 @@ export default async function ContasPage({
         </div>
       )}
 
-      <ListaContas initialContas={lista} diaHoje={diaSemanaIso} resumoHoje={resumoHoje} />
+      <ListaContas
+        initialContas={lista}
+        diaHoje={diaSemanaIso}
+        resumoHoje={resumoHoje}
+        storiesAutomaticosHoje={storiesAutomaticosHoje}
+      />
 
       {lista.length > 0 && (
         <p className="mt-8 text-xs text-slate-400">

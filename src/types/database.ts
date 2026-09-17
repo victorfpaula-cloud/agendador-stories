@@ -9,6 +9,10 @@ export interface Account {
   page_access_token: string;
   token_obtained_at: string;
   is_active: boolean;
+  // Cache da foto de perfil (até 30 dias — ver /api/contas/avatares) pra não
+  // precisar buscar na Graph API do Meta toda vez que a tela de contas abre.
+  avatar_url: string | null;
+  avatar_atualizado_em: string | null;
   created_at: string;
 }
 

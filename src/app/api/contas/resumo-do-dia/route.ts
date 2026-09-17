@@ -40,5 +40,26 @@ export async function GET() {
     if (log.status === "error") resumo[log.account_id].erros += 1;
   }
 
-  return NextResponse.json({ diaHoje: diaSemanaIso, resumo });
+  // Mesma ideia do resumo acima, mas pro card do robô do Story Automático
+  // Drive (só aparece pras contas que têm essa automação configurada).
+  const { data: storyDriveConfigs } = await admin.from("story_drive_config").select("account_id");
+  const inicioDiaUTC = new Date(`${dataISO}T00:00:00-03:00`).toISOString();
+  const fimDiaUTC = new Date(`${dataISO}T23:59:59-03:00`).toISOString();
+  const { data: storiesHojeData } = await admin
+    .from("story_posts")
+    .select("account_id, status")
+    .gte("scheduled_at", inicioDiaUTC)
+    .lte("scheduled_at", fimDiaUTC);
+
+  const storiesAutomaticosHoje: Record<string, number> = {};
+  for (const { account_id } of (storyDriveConfigs ?? []) as { account_id: string }[]) {
+    storiesAutomaticosHoje[account_id] = 0;
+  }
+  for (const s of (storiesHojeData ?? []) as { account_id: string; status: string }[]) {
+    if (s.status === "success" && storiesAutomaticosHoje[s.account_id] !== undefined) {
+      storiesAutomaticosHoje[s.account_id] += 1;
+    }
+  }
+
+  return NextResponse.json({ diaHoje: diaSemanaIso, resumo, storiesAutomaticosHoje });
 }
