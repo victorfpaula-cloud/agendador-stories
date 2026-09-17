@@ -155,28 +155,18 @@ export interface DriveExecucao {
 }
 
 // ---------- Story Automático via Drive (sub-módulo irmão do de cima, mas pra Stories) ----------
-// Sem carrossel (Instagram não tem isso pra Story) e sem legenda — até 5
-// arquivos por dia, cada um com seu próprio horário (horario_1..horario_5).
-// Em branco = esse arquivo não publica, mesmo que exista (ver
-// supabase/story-drive-automation.sql).
+// Sem carrossel (Instagram não tem isso pra Story) e sem legenda. Desde
+// 17/09/2026 não guarda mais horário nenhum aqui — cada arquivo do Drive
+// carrega o seu próprio horário embutido no nome (que vem do assunto do
+// e-mail que o Google Apps Script processa), ver
+// src/lib/storyDriveIngestao.ts e supabase/story-drive-horario-do-assunto.sql.
 export interface StoryDriveConfig {
   account_id: string;
   pasta_drive_id: string | null;
-  horario_1: string | null; // "HH:MM:SS"
-  horario_2: string | null;
-  horario_3: string | null;
-  horario_4: string | null;
-  horario_5: string | null;
   updated_at: string;
 }
 
-export type StoryDriveExecucaoResultado =
-  | "sem_config"
-  | "sem_pasta"
-  | "sem_horario"
-  | "ja_existe"
-  | "stories_criados"
-  | "erro";
+export type StoryDriveExecucaoResultado = "sem_config" | "sem_pasta" | "ja_existe" | "stories_criados" | "erro";
 
 export interface StoryDriveExecucao {
   id: string;
@@ -190,11 +180,19 @@ export interface StoryDriveExecucao {
 export type StoryPostStatus = "pending" | "publishing" | "success" | "error";
 
 // Um Story criado automaticamente a partir do Drive — cada linha é uma
-// publicação de Story independente (nunca agrupada em carrossel).
+// publicação de Story independente (nunca agrupada em carrossel). `dia` é
+// sempre preenchido (o dia da pasta do Drive lida); `scheduled_at` só depois
+// que um horário existir — automático (nome do arquivo) ou definido à mão
+// por Victor na lista de "Stories de hoje" quando vem faltando (status vira
+// "error" nesse caso até ele preencher). `drive_file_id` identifica o
+// arquivo de origem no Drive, pra nunca duplicar o mesmo arquivo processado
+// de novo (ver índice único em story_posts_account_drive_file_unique).
 export interface StoryPost {
   id: string;
   account_id: string;
-  scheduled_at: string;
+  dia: string; // "AAAA-MM-DD"
+  scheduled_at: string | null;
+  drive_file_id: string | null;
   media_url: string | null;
   media_path: string | null;
   media_type: MediaType;

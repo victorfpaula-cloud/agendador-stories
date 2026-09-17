@@ -5,15 +5,16 @@ import { executarLeituraStoryDrive } from "@/lib/storyDriveIngestao";
 // Cron do sub-módulo AutoStory (Story Automático via Drive) — roda a cada
 // 30 min (ver supabase/story-drive-permite-rodar-mais-vezes.sql), lê a
 // pasta do dia de CADA conta com automação configurada e cria os Stories
-// pendentes que ainda não existem (até 5, um por horário configurado) —
-// quem publica de verdade é o motor próprio
-// (/api/cron/publicar-stories-drive), sem nenhuma relação com o motor
-// semanal de Stories (/api/cron/run) nem com o AutoFeed (Drive do Feed).
+// pendentes que ainda não existem (todos os arquivos de foto/vídeo da pasta,
+// cada um com o horário embutido no próprio nome) — quem publica de verdade
+// é o motor próprio (/api/cron/publicar-stories-drive), sem nenhuma relação
+// com o motor semanal de Stories (/api/cron/run) nem com o AutoFeed (Drive
+// do Feed).
 //
 // Diferente do AutoFeed (1x/dia, às 11h): aqui Victor costuma adicionar
 // arquivo 2, 3 na pasta ao longo do dia, então rodar só 1x de manhã deixava
 // esses arquivos sem Story até o dia seguinte. Rodar a cada 30 min é seguro
-// e barato porque a ingestão é idempotente por posição/horário (ver
+// e barato porque a ingestão é idempotente por arquivo do Drive (ver
 // storyDriveIngestao.ts) — na maioria das vezes só confere a pasta, não
 // acha nada novo, e volta rápido sem baixar nada. Passa por fora do limite
 // de 1x/dia do cron nativo da Vercel no plano Hobby porque quem dispara essa
