@@ -160,8 +160,8 @@ function ContaCard({
   conta: Account;
   avatarUrl: string | null;
   resumo: ResumoDoDia;
-  // undefined = conta sem Story Automático Drive configurado (não mostra o
-  // card do robô); número = quantidade já publicada hoje por essa automação.
+  // undefined = conta sem AutoStory configurado (não mostra o card do
+  // robô); número = quantidade já publicada hoje por essa automação.
   storiesAutomaticosHoje: number | undefined;
   diaHoje: number;
   onAtualizar: (conta: Account) => void;
@@ -252,7 +252,7 @@ function ContaCard({
       {storiesAutomaticosHoje !== undefined && (
         <div className="mt-2 flex w-fit items-center gap-1.5 rounded-full bg-indigo-50 px-2 py-1 text-[11px] font-medium text-indigo-700">
           <span aria-hidden="true">🤖</span>
-          <span>Story Automático Drive</span>
+          <span>AutoStory</span>
           <span className="rounded-full bg-indigo-600 px-1.5 py-0.5 text-[10px] leading-none text-white">
             {storiesAutomaticosHoje}
           </span>
