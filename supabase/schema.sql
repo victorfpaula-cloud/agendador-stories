@@ -120,3 +120,9 @@ create policy "Leitura publica story-media"
 -- morreu no meio do caminho, libera de novo): rode
 -- supabase/reivindicacao-recupera-travado.sql também numa instalação nova
 -- do zero.
+
+-- Story Automático Drive deixou de ser "só 1x por dia" — "Tentar de novo
+-- agora" funciona a qualquer momento (Victor adiciona arquivo 2, 3 na pasta
+-- ao longo do dia), processando só as posições/horários que ainda não têm
+-- Story: rode supabase/story-drive-permite-rodar-de-novo.sql também numa
+-- instalação nova do zero.

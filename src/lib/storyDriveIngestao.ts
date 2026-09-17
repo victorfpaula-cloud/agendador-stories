@@ -49,10 +49,16 @@ export async function executarLeituraStoryDrive(
 ): Promise<{ resultado: ResultadoStoryDrive; detalhe?: string; criados?: number }> {
   const { dataISO } = agoraEmSaoPaulo();
 
-  // Reivindica o dia (por conta) antes de tocar em qualquer coisa — mesma
-  // trava (e mesmo motivo) do Drive do Feed e do motor de Stories semanal:
-  // o pg_net retenta chamadas que só pareceram travar por timeout, mas
-  // podem ainda estar processando por trás.
+  // Reivindica antes de tocar em qualquer coisa — evita duas execuções
+  // concorrentes (pg_net retentando uma chamada que só pareceu ter travado
+  // por timeout, mas ainda está processando por trás; ou o cron das 9h e um
+  // clique manual em "Tentar de novo" quase ao mesmo tempo). Diferente do
+  // Drive do Feed, aqui o dia NUNCA fica "fechado" depois de um sucesso —
+  // Victor confirmou que costuma adicionar arquivo 2, 3 na pasta do dia ao
+  // longo do dia, então "Tentar de novo agora" precisa continuar
+  // funcionando mesmo depois de já ter criado algo hoje. A reivindicação só
+  // bloqueia enquanto outra execução está mesmo rodando agora (ou travada há
+  // pouco tempo) — sucesso e erro liberam pra reivindicar de novo na hora.
   const { data: reivindicacao } = await admin
     .rpc("reivindicar_ingestao_story_drive", { p_account_id: accountId, p_dia: dataISO })
     .single<{ reivindicado: boolean }>();
@@ -60,7 +66,7 @@ export async function executarLeituraStoryDrive(
   if (!reivindicacao?.reivindicado) {
     return {
       resultado: "ja_existe",
-      detalhe: "Outra execução já processou (ou está processando agora) o dia de hoje.",
+      detalhe: "Outra execução já está processando o dia de hoje agora — tenta de novo em instantes.",
     };
   }
 
@@ -68,7 +74,7 @@ export async function executarLeituraStoryDrive(
     await registrarExecucao(admin, accountId, resultado, detalhe);
     await admin
       .from("story_drive_lock")
-      .update({ status: resultado === "stories_criados" ? "sucesso" : "erro" })
+      .update({ status: resultado === "erro" ? "erro" : "sucesso" })
       .eq("account_id", accountId)
       .eq("dia", dataISO);
   }
@@ -92,27 +98,26 @@ export async function executarLeituraStoryDrive(
       return { resultado: "sem_horario" };
     }
 
-    // Já existe algum Story automático criado hoje pra essa conta? Rede de
-    // segurança além da reivindicação acima (ex: um Story foi criado com
-    // sucesso mas por algum motivo o story_drive_lock não ficou marcado
-    // como 'sucesso').
+    // Quais horários (posições) já têm um Story criado hoje — pra não
+    // duplicar quando "Tentar de novo agora" roda de novo mais tarde no
+    // mesmo dia (ex: Victor adicionou o arquivo 2 na pasta depois que o
+    // arquivo 1 já tinha virado Story de manhã). Compara por scheduled_at
+    // exato: cada posição tem um horário diferente, então dá pra saber
+    // exatamente qual posição já foi processada sem precisar guardar o
+    // número da posição na tabela.
     const inicioDiaUTC = new Date(`${dataISO}T00:00:00-03:00`).toISOString();
     const fimDiaUTC = new Date(`${dataISO}T23:59:59-03:00`).toISOString();
-    const { data: jaExiste } = await admin
+    const { data: existentes } = await admin
       .from("story_posts")
-      .select("id")
+      .select("scheduled_at")
       .eq("account_id", accountId)
       .eq("source", "drive")
       .gte("scheduled_at", inicioDiaUTC)
-      .lte("scheduled_at", fimDiaUTC)
-      .limit(1)
-      .maybeSingle();
+      .lte("scheduled_at", fimDiaUTC);
 
-    if (jaExiste) {
-      await admin.from("story_drive_lock").update({ status: "sucesso" }).eq("account_id", accountId).eq("dia", dataISO);
-      await registrarExecucao(admin, accountId, "ja_existe", "Já existem Stories automáticos criados hoje.");
-      return { resultado: "ja_existe" };
-    }
+    const horariosJaCriados = new Set(
+      ((existentes ?? []) as { scheduled_at: string }[]).map((e) => new Date(e.scheduled_at).toISOString())
+    );
 
     const pastaMaeId = extrairIdDaPasta(cfg.pasta_drive_id);
     const accessToken = await obterAccessToken();
@@ -141,17 +146,31 @@ export async function executarLeituraStoryDrive(
     // Casamento posicional e estrito: arquivo N (ordem alfabética) só vira
     // Story se horario_N estiver preenchido — em branco, esse arquivo é
     // ignorado mesmo que exista (regra explícita do Victor). Também ignora
-    // arquivos além da posição 5 (não tem horário configurável pra eles).
-    const casamentos: { posicao: number; horario: string; arquivo: (typeof arquivosMidia)[number] }[] = [];
+    // arquivos além da posição 5 (não tem horário configurável pra eles), e
+    // pula posições que já viraram Story numa execução anterior hoje (ver
+    // horariosJaCriados acima) — assim rodar de novo só processa o que é
+    // novo, sem duplicar o que já foi feito.
+    const casamentos: { posicao: number; horario: string; scheduledAt: string; arquivo: (typeof arquivosMidia)[number] }[] = [];
+    let algumaPosicaoJaCriada = false;
     for (let i = 0; i < 5; i++) {
       const horario = horarios[i];
       const arquivo = arquivosMidia[i];
-      if (horario && arquivo) {
-        casamentos.push({ posicao: i + 1, horario, arquivo });
+      if (!horario || !arquivo) continue;
+
+      const scheduledAt = new Date(`${dataISO}T${horario}-03:00`).toISOString();
+      if (horariosJaCriados.has(scheduledAt)) {
+        algumaPosicaoJaCriada = true;
+        continue;
       }
+      casamentos.push({ posicao: i + 1, horario, scheduledAt, arquivo });
     }
 
     if (casamentos.length === 0) {
+      if (algumaPosicaoJaCriada) {
+        const detalhe = "Os Stories configurados pra hoje já tinham sido criados antes — nada novo pra fazer.";
+        await finalizar("ja_existe", detalhe);
+        return { resultado: "ja_existe", detalhe };
+      }
       const detalhe = `Havia ${arquivosMidia.length} arquivo(s) na pasta, mas nenhum tem horário configurado pra essa posição.`;
       await finalizar("sem_horario", detalhe);
       return { resultado: "sem_horario", detalhe };
@@ -161,15 +180,13 @@ export async function executarLeituraStoryDrive(
     // bucket usado pelos Stories manuais (schedule_slots), já que na
     // prática é o mesmo tipo de conteúdo (um Story avulso).
     const criados: string[] = [];
-    for (const { horario, arquivo } of casamentos) {
+    for (const { scheduledAt, arquivo } of casamentos) {
       const buffer = await baixarArquivoDrive(accessToken, arquivo.id);
       const tipo: "IMAGE" | "VIDEO" = arquivo.mimeType.startsWith("video/") ? "VIDEO" : "IMAGE";
       const enviado = await enviarMidiaBuffer(admin, "story-media", "drive", buffer, arquivo.mimeType, arquivo.name);
       const thumbnailDataUrl = arquivo.thumbnailLink
         ? await baixarThumbnailDrive(accessToken, arquivo.thumbnailLink)
         : null;
-
-      const scheduledAt = new Date(`${dataISO}T${horario}-03:00`).toISOString();
 
       const { data: storyPost, error: erroStoryPost } = await admin
         .from("story_posts")
