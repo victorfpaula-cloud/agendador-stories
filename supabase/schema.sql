@@ -113,3 +113,10 @@ create policy "Leitura publica story-media"
 -- Cache da foto de perfil do Instagram em accounts.avatar_url (até 30 dias,
 -- evita bater na Graph API do Meta toda vez que a tela de contas abre):
 -- rode supabase/cache-avatar-contas.sql também numa instalação nova do zero.
+
+-- As 3 funções reivindicar_* (Stories semanal, Drive do Feed, Story
+-- Automático Drive) ganharam recuperação automática de reivindicação
+-- travada (status transitório parado há mais de 10 min = tentativa anterior
+-- morreu no meio do caminho, libera de novo): rode
+-- supabase/reivindicacao-recupera-travado.sql também numa instalação nova
+-- do zero.
