@@ -34,15 +34,15 @@ export default async function StoryDriveConfigPage({ params }: { params: { id: s
     .maybeSingle();
 
   const { dataISO } = agoraEmSaoPaulo();
-  const inicioDiaUTC = new Date(`${dataISO}T00:00:00-03:00`).toISOString();
-  const fimDiaUTC = new Date(`${dataISO}T23:59:59-03:00`).toISOString();
+  // Filtra por `dia` (não por scheduled_at) — um Story sem horário
+  // reconhecido fica com scheduled_at nulo até Victor completar à mão, mas
+  // precisa continuar aparecendo na lista de hoje pra ele conseguir corrigir.
   const { data: storiesHoje } = await admin
     .from("story_posts")
     .select("*")
     .eq("account_id", params.id)
-    .gte("scheduled_at", inicioDiaUTC)
-    .lte("scheduled_at", fimDiaUTC)
-    .order("scheduled_at", { ascending: true });
+    .eq("dia", dataISO)
+    .order("scheduled_at", { ascending: true, nullsFirst: true });
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">

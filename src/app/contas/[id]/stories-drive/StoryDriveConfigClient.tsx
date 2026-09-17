@@ -9,8 +9,7 @@ import type { StoryDriveConfig, StoryDriveExecucao, StoryDriveExecucaoResultado,
 const EXECUCAO_INFO: Record<StoryDriveExecucaoResultado, { texto: string; cor: string }> = {
   sem_config: { texto: "Configuração incompleta — falta a pasta do Drive.", cor: "text-amber-600" },
   sem_pasta: { texto: "Nenhuma pasta encontrada pra esse dia — sem Story hoje, normal.", cor: "text-slate-500" },
-  sem_horario: { texto: "Havia arquivo(s), mas nenhum horário configurado bate com a posição deles.", cor: "text-amber-600" },
-  ja_existe: { texto: "Os Stories de hoje já tinham sido criados antes — nada duplicado.", cor: "text-slate-500" },
+  ja_existe: { texto: "Os arquivos de hoje já tinham virado Story antes — nada duplicado.", cor: "text-slate-500" },
   stories_criados: { texto: "Story(s) criado(s) com sucesso a partir do Drive.", cor: "text-green-600" },
   erro: { texto: "Deu erro ao processar o Drive hoje.", cor: "text-red-600" },
 };
@@ -66,11 +65,6 @@ async function chamarApi(input: string, init?: RequestInit) {
   return json;
 }
 
-// "HH:MM:SS" (formato do banco) -> "HH:MM" (formato do <input type="time">).
-function paraCampoHorario(horario: string | null): string {
-  return horario ? horario.slice(0, 5) : "";
-}
-
 export default function StoryDriveConfigClient({
   accountId,
   initialConfig,
@@ -83,13 +77,6 @@ export default function StoryDriveConfigClient({
   initialStoriesHoje: StoryPost[];
 }) {
   const [pastaDriveId, setPastaDriveId] = useState(initialConfig?.pasta_drive_id ?? "");
-  const [horarios, setHorarios] = useState<string[]>([
-    paraCampoHorario(initialConfig?.horario_1 ?? null),
-    paraCampoHorario(initialConfig?.horario_2 ?? null),
-    paraCampoHorario(initialConfig?.horario_3 ?? null),
-    paraCampoHorario(initialConfig?.horario_4 ?? null),
-    paraCampoHorario(initialConfig?.horario_5 ?? null),
-  ]);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [salvoEm, setSalvoEm] = useState<string | null>(null);
@@ -98,23 +85,15 @@ export default function StoryDriveConfigClient({
   const [storiesHoje, setStoriesHoje] = useState<StoryPost[]>(initialStoriesHoje);
   const router = useRouter();
 
-  function alterarHorario(posicao: number, valor: string) {
-    setHorarios((atual) => atual.map((h, i) => (i === posicao ? valor : h)));
-  }
-
   async function salvar() {
     setErro(null);
     setSalvoEm(null);
     setSalvando(true);
     try {
-      const body: Record<string, string> = { pastaDriveId };
-      horarios.forEach((h, i) => {
-        body[`horario${i + 1}`] = h;
-      });
       await chamarApi(`/api/accounts/${accountId}/story-drive-config`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ pastaDriveId }),
       });
       setSalvoEm(
         new Intl.DateTimeFormat("pt-BR", {
@@ -153,6 +132,10 @@ export default function StoryDriveConfigClient({
     }
   }
 
+  function aoSalvarHorario(story: StoryPost) {
+    setStoriesHoje((atual) => atual.map((s) => (s.id === story.id ? story : s)));
+  }
+
   return (
     <div className="space-y-6">
       <div className="rounded-xl2 bg-white p-5 shadow-sm ring-1 ring-slate-200">
@@ -169,31 +152,11 @@ export default function StoryDriveConfigClient({
             />
             <span className="mt-1 block text-xs text-slate-400">
               A pasta que tem, dentro dela, uma pasta por dia (ex: "17-09-2026") — separada da pasta usada nas
-              Publicações. Todos os arquivos de foto/vídeo daquele dia contam, na ordem alfabética do nome.
+              Publicações. Todos os arquivos de foto/vídeo daquele dia contam. O horário de cada um vem do nome do
+              arquivo (que o Google Apps Script grava a partir do assunto do e-mail) — sem horário reconhecido, o
+              Story aparece com erro na lista abaixo pra você completar à mão.
             </span>
           </label>
-
-          <div>
-            <span className="mb-1 block text-xs font-medium text-slate-500">Horário de cada arquivo do dia</span>
-            <div className="space-y-2">
-              {horarios.map((horario, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <span className="w-20 shrink-0 text-sm text-slate-600">Arquivo {i + 1}</span>
-                  <input
-                    type="time"
-                    value={horario}
-                    onChange={(e) => alterarHorario(i, e.target.value)}
-                    disabled={salvando}
-                    className="w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-sm sm:w-40"
-                  />
-                </div>
-              ))}
-            </div>
-            <span className="mt-1 block text-xs text-slate-400">
-              Em branco = esse arquivo não é publicado, mesmo que exista na pasta do dia. Arquivo 1 é o primeiro em
-              ordem alfabética, Arquivo 2 o segundo, e assim por diante.
-            </span>
-          </div>
 
           <button
             type="button"
@@ -247,33 +210,104 @@ export default function StoryDriveConfigClient({
         ) : (
           <div className="space-y-2">
             {storiesHoje.map((story) => (
-              <div key={story.id} className="flex items-center gap-3 rounded-xl2 bg-white p-3 shadow-sm ring-1 ring-slate-200">
-                <MiniaturaMidia thumbnailDataUrl={story.thumbnail_data_url} />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-medium text-slate-700">{formatarHora(story.scheduled_at)}</span>
-                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_INFO[story.status].cor}`}>
-                      {STATUS_INFO[story.status].texto}
-                    </span>
-                  </div>
-                  {story.status === "error" && story.error_message && (
-                    <p className="mt-1 text-xs text-red-600">{story.error_message}</p>
-                  )}
-                </div>
-                {story.status === "pending" && (
-                  <button
-                    type="button"
-                    onClick={() => cancelar(story.id)}
-                    className="shrink-0 text-xs font-medium text-red-500 hover:text-red-700"
-                  >
-                    Cancelar
-                  </button>
-                )}
-              </div>
+              <StoryHojeItem key={story.id} story={story} onCancelar={cancelar} onSalvarHorario={aoSalvarHorario} />
             ))}
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// "2026-09-17T18:30:00.000Z" (em America/Sao_Paulo) -> "15:30", pro valor
+// inicial do <input type="time">.
+function paraCampoHorario(iso: string | null): string {
+  if (!iso) return "";
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date(iso));
+}
+
+function StoryHojeItem({
+  story,
+  onCancelar,
+  onSalvarHorario,
+}: {
+  story: StoryPost;
+  onCancelar: (id: string) => void;
+  onSalvarHorario: (story: StoryPost) => void;
+}) {
+  const editavel = story.status === "pending" || story.status === "error";
+  const [horario, setHorario] = useState(paraCampoHorario(story.scheduled_at));
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  async function salvarHorario() {
+    setErro(null);
+    setSalvando(true);
+    try {
+      const json = await chamarApi(`/api/story-posts/${story.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ horario }),
+      });
+      onSalvarHorario(json.story as StoryPost);
+    } catch (err) {
+      setErro(err instanceof Error ? err.message : "Erro ao salvar o horário.");
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-3 rounded-xl2 bg-white p-3 shadow-sm ring-1 ring-slate-200">
+      <MiniaturaMidia thumbnailDataUrl={story.thumbnail_data_url} />
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          {editavel ? (
+            <div className="flex items-center gap-1.5">
+              <input
+                type="time"
+                value={horario}
+                onChange={(e) => setHorario(e.target.value)}
+                disabled={salvando}
+                className="rounded-md border border-slate-300 px-2 py-1 text-sm"
+              />
+              <button
+                type="button"
+                onClick={salvarHorario}
+                disabled={salvando || !horario}
+                className="rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-500 hover:border-brand-300 hover:text-brand-600 disabled:opacity-60"
+              >
+                {salvando ? "…" : "Salvar"}
+              </button>
+            </div>
+          ) : (
+            <span className="text-sm font-medium text-slate-700">
+              {story.scheduled_at ? formatarHora(story.scheduled_at) : "—"}
+            </span>
+          )}
+          <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_INFO[story.status].cor}`}>
+            {STATUS_INFO[story.status].texto}
+          </span>
+        </div>
+        {story.status === "error" && story.error_message && (
+          <p className="mt-1 text-xs text-red-600">{story.error_message}</p>
+        )}
+        {erro && <p className="mt-1 text-xs text-red-600">{erro}</p>}
+      </div>
+      {editavel && (
+        <button
+          type="button"
+          onClick={() => onCancelar(story.id)}
+          className="shrink-0 text-xs font-medium text-red-500 hover:text-red-700"
+        >
+          Cancelar
+        </button>
+      )}
     </div>
   );
 }

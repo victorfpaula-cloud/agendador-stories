@@ -129,8 +129,10 @@ async function executar(req: NextRequest) {
       await enviarEmail({
         assunto: `Erro ao publicar Story automático (Drive) — ${conta.name}`,
         corpo:
+          // scheduled_at nunca é nulo aqui — a consulta acima já filtra por
+          // "lte scheduled_at" (que nunca bate contra null no Postgres).
           `A conta "${conta.name}" teve um erro ao tentar publicar um Story automático do Drive agendado ` +
-          `pra ${formatarDataHoraSaoPaulo(item.scheduled_at)}.\n\n` +
+          `pra ${formatarDataHoraSaoPaulo(item.scheduled_at as string)}.\n\n` +
           `Erro: ${msg}\n\n` +
           `Publica esse Story manualmente enquanto isso.`,
       });

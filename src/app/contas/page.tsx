@@ -51,13 +51,9 @@ export default async function ContasPage({
   // aparece o card pras contas que têm essa automação configurada (evita
   // mostrar "0" pra quem nem usa esse recurso).
   const { data: storyDriveConfigs } = await admin.from("story_drive_config").select("account_id");
-  const inicioDiaUTC = new Date(`${dataISO}T00:00:00-03:00`).toISOString();
-  const fimDiaUTC = new Date(`${dataISO}T23:59:59-03:00`).toISOString();
-  const { data: storiesHojeData } = await admin
-    .from("story_posts")
-    .select("account_id, status")
-    .gte("scheduled_at", inicioDiaUTC)
-    .lte("scheduled_at", fimDiaUTC);
+  // Por `dia` (não por scheduled_at) — um Story sem horário reconhecido
+  // ainda conta como "agendado hoje" mesmo com scheduled_at nulo.
+  const { data: storiesHojeData } = await admin.from("story_posts").select("account_id, status").eq("dia", dataISO);
 
   const storiesAutomaticosHoje: Record<string, { agendados: number; postados: number }> = {};
   for (const { account_id } of (storyDriveConfigs ?? []) as { account_id: string }[]) {

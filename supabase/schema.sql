@@ -131,3 +131,10 @@ create policy "Leitura publica story-media"
 -- ingestão idempotente acima torna isso seguro e barato: rode
 -- supabase/story-drive-permite-rodar-mais-vezes.sql também numa instalação
 -- nova do zero.
+
+-- AutoStory deixou de usar os 5 horários fixos da configuração — cada
+-- arquivo do Drive carrega o seu próprio horário embutido no nome (que vem
+-- do assunto do e-mail, via Google Apps Script). Sem horário reconhecido, o
+-- Story é criado com status "error" pra Victor completar à mão na lista de
+-- "Stories de hoje": rode supabase/story-drive-horario-do-assunto.sql
+-- também numa instalação nova do zero.
