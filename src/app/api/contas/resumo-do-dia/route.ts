@@ -51,14 +51,14 @@ export async function GET() {
     .gte("scheduled_at", inicioDiaUTC)
     .lte("scheduled_at", fimDiaUTC);
 
-  const storiesAutomaticosHoje: Record<string, number> = {};
+  const storiesAutomaticosHoje: Record<string, { agendados: number; postados: number }> = {};
   for (const { account_id } of (storyDriveConfigs ?? []) as { account_id: string }[]) {
-    storiesAutomaticosHoje[account_id] = 0;
+    storiesAutomaticosHoje[account_id] = { agendados: 0, postados: 0 };
   }
   for (const s of (storiesHojeData ?? []) as { account_id: string; status: string }[]) {
-    if (s.status === "success" && storiesAutomaticosHoje[s.account_id] !== undefined) {
-      storiesAutomaticosHoje[s.account_id] += 1;
-    }
+    if (!storiesAutomaticosHoje[s.account_id]) continue;
+    storiesAutomaticosHoje[s.account_id].agendados += 1;
+    if (s.status === "success") storiesAutomaticosHoje[s.account_id].postados += 1;
   }
 
   return NextResponse.json({ diaHoje: diaSemanaIso, resumo, storiesAutomaticosHoje });

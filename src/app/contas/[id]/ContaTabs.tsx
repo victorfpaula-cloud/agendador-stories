@@ -26,12 +26,15 @@ export default function ContaTabs({ accountId }: { accountId: string }) {
   ];
 
   return (
-    <div className="mb-6 flex gap-2 overflow-x-auto pb-1">
+    // Grade 2x2 no celular (4 botões nunca cabiam numa linha só sem cortar
+    // na borda — achado por Victor em 18/09/2026); vira uma linha só a
+    // partir do tablet, onde já sobra espaço de sobra.
+    <div className="mb-6 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
       {abas.map((aba) => (
         <Link
           key={aba.href}
           href={aba.href}
-          className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-2 text-sm font-medium transition ${
+          className={`flex items-center justify-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-2 text-sm font-medium transition ${
             aba.ativo
               ? "bg-brand-600 text-white shadow-sm"
               : "bg-slate-100 text-slate-600 hover:bg-slate-200"
