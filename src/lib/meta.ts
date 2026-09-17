@@ -174,7 +174,19 @@ export async function publicarStory(params: CriarContainerParams): Promise<strin
   // isso não é instantâneo. Publicar cedo demais gera o erro "Media ID is
   // not available". Por isso agora espera ficar pronto pros dois tipos —
   // na prática, pra imagem isso quase sempre resolve na primeira checagem.
-  await esperarContainerFicarPronto(containerId, params.pageAccessToken);
+  //
+  // Achado em 16/09/2026: o padrão de 60s aqui, somado ao tempo de criar o
+  // container e publicar, deixava praticamente zero folga dentro do limite
+  // de 60s da função da Vercel (/api/cron/run, maxDuration=60) — se a espera
+  // batesse perto do teto, a Vercel matava a função no meio do caminho,
+  // ANTES do catch conseguir marcar erro e mandar e-mail. Resultado: o Story
+  // ficava preso em 'publishing' pra sempre (bolinha amarela, sem erro, sem
+  // aviso — 2 casos reais na conta "Único Sushi Bar"). Corrigido também com
+  // uma trava que recupera reivindicações travadas há mais de 10 min (ver
+  // reivindicar_publicacao), mas essa margem aqui reduz a chance de precisar
+  // dessa rede de segurança: 40s de espera deixa ~20s de folga real pro
+  // resto da função terminar a tempo de registrar o que aconteceu.
+  await esperarContainerFicarPronto(containerId, params.pageAccessToken, 40_000);
 
   return publicarContainer(params.igUserId, containerId, params.pageAccessToken);
 }
