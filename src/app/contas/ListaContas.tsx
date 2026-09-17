@@ -44,6 +44,8 @@ async function chamarApi(input: string, init?: RequestInit) {
   return json;
 }
 
+export type ResumoAutoStory = { agendados: number; postados: number };
+
 export default function ListaContas({
   initialContas,
   diaHoje,
@@ -53,12 +55,12 @@ export default function ListaContas({
   initialContas: Account[];
   diaHoje: number;
   resumoHoje: Record<string, ResumoDoDia>;
-  storiesAutomaticosHoje: Record<string, number>;
+  storiesAutomaticosHoje: Record<string, ResumoAutoStory>;
 }) {
   const [contas, setContas] = useState<Account[]>(initialContas);
   const [diaAtual, setDiaAtual] = useState(diaHoje);
   const [resumoAtual, setResumoAtual] = useState<Record<string, ResumoDoDia>>(resumoHoje);
-  const [storiesDriveAtual, setStoriesDriveAtual] = useState<Record<string, number>>(storiesAutomaticosHoje);
+  const [storiesDriveAtual, setStoriesDriveAtual] = useState<Record<string, ResumoAutoStory>>(storiesAutomaticosHoje);
   const [avatares, setAvatares] = useState<Record<string, string | null>>({});
 
   function aoAtualizar(conta: Account) {
@@ -161,8 +163,9 @@ function ContaCard({
   avatarUrl: string | null;
   resumo: ResumoDoDia;
   // undefined = conta sem AutoStory configurado (não mostra o card do
-  // robô); número = quantidade já publicada hoje por essa automação.
-  storiesAutomaticosHoje: number | undefined;
+  // robô); objeto = quantos Stories estão agendados hoje por essa
+  // automação e quantos já saíram.
+  storiesAutomaticosHoje: ResumoAutoStory | undefined;
   diaHoje: number;
   onAtualizar: (conta: Account) => void;
   onRemover: (id: string) => void;
@@ -250,11 +253,14 @@ function ContaCard({
       </Link>
 
       {storiesAutomaticosHoje !== undefined && (
-        <div className="mt-2 flex w-fit items-center gap-1.5 rounded-full bg-indigo-50 px-2 py-1 text-[11px] font-medium text-indigo-700">
+        <div
+          className="mt-2 flex w-fit items-center gap-1.5 rounded-full bg-indigo-50 px-2 py-1 text-[11px] font-medium text-indigo-700"
+          title="Stories automáticos publicados hoje / agendados pra hoje"
+        >
           <span aria-hidden="true">🤖</span>
           <span>AutoStory</span>
           <span className="rounded-full bg-indigo-600 px-1.5 py-0.5 text-[10px] leading-none text-white">
-            {storiesAutomaticosHoje}
+            {storiesAutomaticosHoje.postados}/{storiesAutomaticosHoje.agendados}
           </span>
         </div>
       )}

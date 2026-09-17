@@ -208,13 +208,13 @@ export default function StoryDriveConfigClient({
           {salvoEm && !erro && <p className="text-xs text-green-600">Configuração salva ({salvoEm}).</p>}
 
           <div className="border-t border-slate-100 pt-3">
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <span className="block text-xs font-medium text-slate-500">Última verificação do Drive</span>
               <button
                 type="button"
                 onClick={tentarDeNovo}
                 disabled={tentandoDeNovo}
-                className="shrink-0 rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-500 hover:border-brand-300 hover:text-brand-600 disabled:opacity-60"
+                className="w-full shrink-0 rounded-md border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-500 hover:border-brand-300 hover:text-brand-600 disabled:opacity-60 sm:w-auto sm:py-1"
               >
                 {tentandoDeNovo ? "Tentando…" : "↻ Tentar de novo agora"}
               </button>
