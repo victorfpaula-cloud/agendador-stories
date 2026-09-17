@@ -104,3 +104,8 @@ create policy "Leitura publica story-media"
 -- Drive agora é configurada dentro de cada conta, não mais numa tela
 -- global. Rode supabase/drive_config-por-conta.sql também numa instalação
 -- nova do zero (nela já cria a tabela com o formato novo direto).
+
+-- Story Automático via Drive (sub-módulo irmão do Drive do Feed, mas pra
+-- Stories — até 5 arquivos por dia, cada um com seu próprio horário, sem
+-- carrossel nem legenda): rode supabase/story-drive-automation.sql também
+-- numa instalação nova do zero.

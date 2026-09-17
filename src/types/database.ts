@@ -149,3 +149,56 @@ export interface DriveExecucao {
   account_id: string | null;
   created_at: string;
 }
+
+// ---------- Story Automático via Drive (sub-módulo irmão do de cima, mas pra Stories) ----------
+// Sem carrossel (Instagram não tem isso pra Story) e sem legenda — até 5
+// arquivos por dia, cada um com seu próprio horário (horario_1..horario_5).
+// Em branco = esse arquivo não publica, mesmo que exista (ver
+// supabase/story-drive-automation.sql).
+export interface StoryDriveConfig {
+  account_id: string;
+  pasta_drive_id: string | null;
+  horario_1: string | null; // "HH:MM:SS"
+  horario_2: string | null;
+  horario_3: string | null;
+  horario_4: string | null;
+  horario_5: string | null;
+  updated_at: string;
+}
+
+export type StoryDriveExecucaoResultado =
+  | "sem_config"
+  | "sem_pasta"
+  | "sem_horario"
+  | "ja_existe"
+  | "stories_criados"
+  | "erro";
+
+export interface StoryDriveExecucao {
+  id: string;
+  account_id: string | null;
+  executado_em: string;
+  resultado: StoryDriveExecucaoResultado;
+  detalhe: string | null;
+  created_at: string;
+}
+
+export type StoryPostStatus = "pending" | "publishing" | "success" | "error";
+
+// Um Story criado automaticamente a partir do Drive — cada linha é uma
+// publicação de Story independente (nunca agrupada em carrossel).
+export interface StoryPost {
+  id: string;
+  account_id: string;
+  scheduled_at: string;
+  media_url: string | null;
+  media_path: string | null;
+  media_type: MediaType;
+  thumbnail_data_url: string | null;
+  source: "drive";
+  status: StoryPostStatus;
+  ig_media_id: string | null;
+  error_message: string | null;
+  published_at: string | null;
+  created_at: string;
+}
