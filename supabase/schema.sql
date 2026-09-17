@@ -109,3 +109,7 @@ create policy "Leitura publica story-media"
 -- Stories — até 5 arquivos por dia, cada um com seu próprio horário, sem
 -- carrossel nem legenda): rode supabase/story-drive-automation.sql também
 -- numa instalação nova do zero.
+
+-- Cache da foto de perfil do Instagram em accounts.avatar_url (até 30 dias,
+-- evita bater na Graph API do Meta toda vez que a tela de contas abre):
+-- rode supabase/cache-avatar-contas.sql também numa instalação nova do zero.

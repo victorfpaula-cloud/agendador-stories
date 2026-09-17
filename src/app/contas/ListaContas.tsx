@@ -48,14 +48,17 @@ export default function ListaContas({
   initialContas,
   diaHoje,
   resumoHoje,
+  storiesAutomaticosHoje,
 }: {
   initialContas: Account[];
   diaHoje: number;
   resumoHoje: Record<string, ResumoDoDia>;
+  storiesAutomaticosHoje: Record<string, number>;
 }) {
   const [contas, setContas] = useState<Account[]>(initialContas);
   const [diaAtual, setDiaAtual] = useState(diaHoje);
   const [resumoAtual, setResumoAtual] = useState<Record<string, ResumoDoDia>>(resumoHoje);
+  const [storiesDriveAtual, setStoriesDriveAtual] = useState<Record<string, number>>(storiesAutomaticosHoje);
   const [avatares, setAvatares] = useState<Record<string, string | null>>({});
 
   function aoAtualizar(conta: Account) {
@@ -79,6 +82,7 @@ export default function ListaContas({
         const json = await chamarApi("/api/contas/resumo-do-dia");
         if (cancelado) return;
         setResumoAtual(json.resumo);
+        setStoriesDriveAtual(json.storiesAutomaticosHoje);
         setDiaAtual(json.diaHoje);
       } catch {
         // Falha silenciosa: é só um recheck em segundo plano, tenta de
@@ -126,6 +130,7 @@ export default function ListaContas({
           conta={conta}
           avatarUrl={avatares[conta.id] ?? null}
           resumo={resumoAtual[conta.id] ?? { total: 0, postados: 0, erros: 0 }}
+          storiesAutomaticosHoje={storiesDriveAtual[conta.id]}
           diaHoje={diaAtual}
           onAtualizar={aoAtualizar}
           onRemover={aoRemover}
@@ -147,6 +152,7 @@ function ContaCard({
   conta,
   avatarUrl,
   resumo,
+  storiesAutomaticosHoje,
   diaHoje,
   onAtualizar,
   onRemover,
@@ -154,6 +160,9 @@ function ContaCard({
   conta: Account;
   avatarUrl: string | null;
   resumo: ResumoDoDia;
+  // undefined = conta sem Story Automático Drive configurado (não mostra o
+  // card do robô); número = quantidade já publicada hoje por essa automação.
+  storiesAutomaticosHoje: number | undefined;
   diaHoje: number;
   onAtualizar: (conta: Account) => void;
   onRemover: (id: string) => void;
@@ -239,6 +248,16 @@ function ContaCard({
           {conta.ig_username ? `@${conta.ig_username}` : "Instagram conectado"}
         </p>
       </Link>
+
+      {storiesAutomaticosHoje !== undefined && (
+        <div className="mt-2 flex w-fit items-center gap-1.5 rounded-full bg-indigo-50 px-2 py-1 text-[11px] font-medium text-indigo-700">
+          <span aria-hidden="true">🤖</span>
+          <span>Story Automático Drive</span>
+          <span className="rounded-full bg-indigo-600 px-1.5 py-0.5 text-[10px] leading-none text-white">
+            {storiesAutomaticosHoje}
+          </span>
+        </div>
+      )}
 
       <ResumoDoDiaPainel resumo={resumo} diaHoje={diaHoje} />
 
