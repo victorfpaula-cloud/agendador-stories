@@ -126,3 +126,8 @@ create policy "Leitura publica story-media"
 -- ao longo do dia), processando só as posições/horários que ainda não têm
 -- Story: rode supabase/story-drive-permite-rodar-de-novo.sql também numa
 -- instalação nova do zero.
+
+-- O cron do AutoStory passou de 1x/dia (9h) pra a cada 30 min, já que a
+-- ingestão idempotente acima torna isso seguro e barato: rode
+-- supabase/story-drive-permite-rodar-mais-vezes.sql também numa instalação
+-- nova do zero.

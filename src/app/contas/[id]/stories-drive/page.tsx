@@ -52,7 +52,7 @@ export default async function StoryDriveConfigPage({ params }: { params: { id: s
         </Link>
         <h1 className="mt-1 text-2xl font-semibold text-slate-900">{(conta as Account).name}</h1>
         <p className="text-sm text-slate-500">
-          O robô confere a pasta do dia uma vez por dia (às 9h) e publica cada Story no horário configurado.
+          O robô confere a pasta do dia a cada 30 minutos e publica cada Story no horário configurado.
         </p>
       </div>
 
