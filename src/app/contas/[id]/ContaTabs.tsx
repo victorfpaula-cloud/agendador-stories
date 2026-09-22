@@ -16,19 +16,23 @@ export default function ContaTabs({ accountId }: { accountId: string }) {
   const emAutoFeed = pathname?.startsWith(`${base}/publicacoes/drive`);
   const emPublicacoes = pathname?.startsWith(`${base}/publicacoes`) && !emAutoFeed;
   const emAutoStory = pathname?.startsWith(`${base}/stories-drive`);
-  const emStories = !emPublicacoes && !emAutoFeed && !emAutoStory;
+  const emCicloStory = pathname?.startsWith(`${base}/stories-ciclo`);
+  const emStories = !emPublicacoes && !emAutoFeed && !emAutoStory && !emCicloStory;
 
   const abas = [
     { href: base, label: "Stories", ativo: emStories, Icone: IconeStories },
     { href: `${base}/publicacoes`, label: "Publicações", ativo: !!emPublicacoes, Icone: IconePublicacoes },
     { href: `${base}/publicacoes/drive`, label: "AutoFeed", ativo: !!emAutoFeed, Icone: IconeAutoFeed },
     { href: `${base}/stories-drive`, label: "AutoStory", ativo: !!emAutoStory, Icone: IconeAutoStory },
+    { href: `${base}/stories-ciclo`, label: "CicloStory", ativo: !!emCicloStory, Icone: IconeCicloStory },
   ];
 
   return (
     // Grade 2x2 no celular (4 botões nunca cabiam numa linha só sem cortar
     // na borda — achado por Victor em 18/09/2026); vira uma linha só a
-    // partir do tablet, onde já sobra espaço de sobra.
+    // partir do tablet, onde já sobra espaço de sobra. Com 5 botões, o
+    // último fica sozinho numa 3a linha no celular — aceitável, ainda sem
+    // cortar borda.
     <div className="mb-6 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
       {abas.map((aba) => (
         <Link
@@ -95,6 +99,20 @@ function IconeAutoStory({ className }: IconeProps) {
       <circle cx="9" cy="13.2" r="1.1" fill="currentColor" stroke="none" />
       <circle cx="15" cy="13.2" r="1.1" fill="currentColor" stroke="none" />
       <path d="M9 16.3h6" />
+    </svg>
+  );
+}
+
+// Fotos empilhadas com uma setinha de ciclo no canto — banco de imagens que
+// gira sem repetir (CicloStory), distinto do robô do AutoStory e das setas
+// em ciclo "cheias" do AutoFeed.
+function IconeCicloStory({ className }: IconeProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <rect x="3" y="6" width="12" height="12" rx="2" />
+      <path d="M7 6V4.8A1.8 1.8 0 0 1 8.8 3h9.4A1.8 1.8 0 0 1 20 4.8v9.4a1.8 1.8 0 0 1-1.8 1.8H17" />
+      <path d="M17.5 9.5a3 3 0 0 0-5-1.3M9.5 12.5a3 3 0 0 0 5 1.3" />
+      <path d="M12.3 7.9l.2 1.6-1.6-.3M11.7 14.1l-.2-1.6 1.6.3" />
     </svg>
   );
 }

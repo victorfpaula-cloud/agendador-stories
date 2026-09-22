@@ -177,6 +177,62 @@ export interface StoryDriveExecucao {
   created_at: string;
 }
 
+// ---------- CicloStory (banco de imagens por categoria, gira sem repetir) ----------
+// Módulo isolado de AutoFeed/AutoStory — pedido explícito do Victor pra não
+// misturar por baixo dos panos. Cada categoria já é o "slot": tem nome,
+// dias da semana ativos, uma lista de horários e uma galeria de
+// imagens/vídeos que o robô escolhe (sempre a que está há mais tempo sem
+// uso — ver função gerar_story_ciclo no banco) sem nunca precisar de reset.
+export interface StoryCicloCategoria {
+  id: string;
+  account_id: string;
+  nome: string;
+  dias_semana: number[]; // 1 = segunda ... 7 = domingo
+  created_at: string;
+}
+
+export interface StoryCicloHorario {
+  id: string;
+  category_id: string;
+  horario: string; // "HH:MM:SS"
+  is_active: boolean;
+  created_at: string;
+}
+
+// Um item do "balde" de uma categoria. usado_em nulo = nunca publicado
+// ainda; preenchido = a última vez que foi escolhido pra publicar.
+export interface StoryCicloItem {
+  id: string;
+  category_id: string;
+  media_url: string;
+  media_path: string;
+  media_type: MediaType;
+  thumbnail_data_url: string | null;
+  usado_em: string | null;
+  created_at: string;
+}
+
+export type StoryCicloPostStatus = "pending" | "publishing" | "success" | "error";
+
+export interface StoryCicloPost {
+  id: string;
+  account_id: string;
+  category_id: string;
+  horario_id: string | null;
+  item_id: string | null;
+  dia: string; // "AAAA-MM-DD"
+  scheduled_at: string;
+  media_url: string | null;
+  media_path: string | null;
+  media_type: MediaType;
+  thumbnail_data_url: string | null;
+  status: StoryCicloPostStatus;
+  ig_media_id: string | null;
+  error_message: string | null;
+  published_at: string | null;
+  created_at: string;
+}
+
 export type StoryPostStatus = "pending" | "publishing" | "success" | "error";
 
 // Um Story criado automaticamente a partir do Drive — cada linha é uma
