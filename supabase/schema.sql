@@ -138,3 +138,9 @@ create policy "Leitura publica story-media"
 -- Story é criado com status "error" pra Victor completar à mão na lista de
 -- "Stories de hoje": rode supabase/story-drive-horario-do-assunto.sql
 -- também numa instalação nova do zero.
+
+-- CicloStory (módulo novo, isolado de AutoFeed/AutoStory): banco de
+-- imagens/vídeos por categoria que gira sem repetir — sempre publica a
+-- mídia há mais tempo sem uso. Cada categoria já é o "slot" completo (nome
+-- + dias da semana + horários + galeria): rode supabase/story-ciclo.sql
+-- também numa instalação nova do zero.
