@@ -185,6 +185,7 @@ function CategoriaCard({
   const [nomeEdicao, setNomeEdicao] = useState(categoria.nome);
   const [salvandoNome, setSalvandoNome] = useState(false);
   const [salvandoDias, setSalvandoDias] = useState(false);
+  const [alternandoAtiva, setAlternandoAtiva] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [apagando, setApagando] = useState(false);
 
@@ -217,6 +218,23 @@ function CategoriaCard({
       setErro(err instanceof Error ? err.message : "Erro ao salvar o nome.");
     } finally {
       setSalvandoNome(false);
+    }
+  }
+
+  async function alternarAtiva() {
+    setAlternandoAtiva(true);
+    setErro(null);
+    try {
+      const json = await chamarApi(`/api/ciclo-categorias/${categoria.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ativa: !categoria.ativa }),
+      });
+      onAtualizar(json.categoria as CategoriaComHorarios);
+    } catch (err) {
+      setErro(err instanceof Error ? err.message : "Erro ao ligar/desligar a categoria.");
+    } finally {
+      setAlternandoAtiva(false);
     }
   }
 
@@ -354,7 +372,7 @@ function CategoriaCard({
   }
 
   return (
-    <div className="rounded-xl2 bg-white p-4 shadow-sm ring-1 ring-slate-200">
+    <div className={`rounded-xl2 bg-white p-4 shadow-sm ring-1 ring-slate-200 transition ${categoria.ativa ? "" : "opacity-60"}`}>
       <div className="flex items-start justify-between gap-2">
         {editandoNome ? (
           <div className="flex flex-1 items-center gap-2">
@@ -382,17 +400,21 @@ function CategoriaCard({
             {categoria.nome}
           </button>
         )}
-        <button
-          type="button"
-          onClick={apagarCategoria}
-          disabled={apagando}
-          className="shrink-0 text-xs font-medium text-red-500 hover:text-red-700 disabled:opacity-60"
-        >
-          {apagando ? "…" : "Apagar categoria"}
-        </button>
+        <div className="flex shrink-0 items-center gap-3">
+          <InterruptorAtiva ativa={categoria.ativa} alternando={alternandoAtiva} onClick={alternarAtiva} />
+          <button
+            type="button"
+            onClick={apagarCategoria}
+            disabled={apagando}
+            className="text-xs font-medium text-red-500 hover:text-red-700 disabled:opacity-60"
+          >
+            {apagando ? "…" : "Apagar"}
+          </button>
+        </div>
       </div>
 
       <p className="mt-1 text-xs text-slate-400">
+        {categoria.ativa ? "" : "Pausada — o robô não publica nada dela agora. "}
         {contagem.total === 0
           ? "Nenhuma imagem ainda"
           : `${contagem.total} imagem(ns) · ${contagem.total - contagem.usadas} nunca usada(s)`}
@@ -507,6 +529,25 @@ function CategoriaCard({
         </div>
       )}
     </div>
+  );
+}
+
+// Chavinha de ligar/desligar a categoria — mesmo padrão visual de um
+// switch (bolinha desliza), sem depender de nenhuma lib nova.
+function InterruptorAtiva({ ativa, alternando, onClick }: { ativa: boolean; alternando: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={alternando}
+      title={ativa ? "Categoria ligada — clique pra pausar" : "Categoria pausada — clique pra religar"}
+      className={`relative h-5 w-9 shrink-0 rounded-full transition disabled:opacity-60 ${ativa ? "bg-brand-600" : "bg-slate-300"}`}
+    >
+      <span
+        className="absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all"
+        style={{ left: ativa ? "18px" : "2px" }}
+      />
+    </button>
   );
 }
 

@@ -188,6 +188,9 @@ export interface StoryCicloCategoria {
   account_id: string;
   nome: string;
   dias_semana: number[]; // 1 = segunda ... 7 = domingo
+  // Chave de ligar/desligar — pausa sem apagar nada (horários, imagens e o
+  // "usado_em" de cada item ficam intactos pra quando reativar).
+  ativa: boolean;
   created_at: string;
 }
 

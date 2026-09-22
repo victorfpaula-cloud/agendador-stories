@@ -27,6 +27,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     patch.dias_semana = dias;
   }
 
+  if (typeof body?.ativa === "boolean") {
+    patch.ativa = body.ativa;
+  }
+
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ erro: "Nada pra atualizar." }, { status: 400 });
   }
