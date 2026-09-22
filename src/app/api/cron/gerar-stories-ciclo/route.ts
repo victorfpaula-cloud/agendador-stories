@@ -41,10 +41,14 @@ async function executar(req: NextRequest) {
     return NextResponse.json({ erro: erroHorarios.message }, { status: 500 });
   }
 
+  // Categorias pausadas (ativa = false) ficam de fora do mapa abaixo — o
+  // filtro logo depois ("diasSemana?.includes") já pula qualquer horário
+  // cuja categoria não apareceu aqui, sem precisar de checagem extra.
   const categoriaIds = Array.from(new Set((horarios ?? []).map((h) => h.category_id as string)));
   const { data: categorias, error: erroCategorias } = await admin
     .from("story_ciclo_categoria")
     .select("id, dias_semana")
+    .eq("ativa", true)
     .in("id", categoriaIds.length > 0 ? categoriaIds : [""]);
 
   if (erroCategorias) {

@@ -144,3 +144,8 @@ create policy "Leitura publica story-media"
 -- mídia há mais tempo sem uso. Cada categoria já é o "slot" completo (nome
 -- + dias da semana + horários + galeria): rode supabase/story-ciclo.sql
 -- também numa instalação nova do zero.
+
+-- CicloStory ganhou uma chave de ligar/desligar por categoria e passou a
+-- escolher aleatoriamente entre os itens nunca usados (em vez de sempre
+-- pela ordem de upload): rode supabase/story-ciclo-pausa-e-sorteio.sql
+-- também numa instalação nova do zero (depois do story-ciclo.sql).
