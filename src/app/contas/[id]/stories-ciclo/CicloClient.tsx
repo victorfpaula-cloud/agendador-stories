@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { DIAS_SEMANA } from "@/lib/days";
+import { prepararImagem } from "@/lib/imagemCliente";
 import { enviarMidiaDireto } from "@/lib/uploadDireto";
 import { gerarThumbnail } from "@/lib/thumbnail";
 import type { StoryCicloCategoria, StoryCicloHorario, StoryCicloItem } from "@/types/database";
@@ -320,8 +321,9 @@ function CategoriaCard({
       const enviados: { url: string; path: string; mediaType: string; thumbnailDataUrl: string | null }[] = [];
       for (let i = 0; i < files.length; i++) {
         setProgresso(`Enviando ${i + 1} de ${files.length}…`);
-        const thumbnailDataUrl = await gerarThumbnail(files[i]);
-        const resultado = await enviarMidiaDireto(files[i], { bucket: "story-media", pasta: `ciclo/${categoria.id}` });
+        const arquivoFinal = await prepararImagem(files[i]);
+        const thumbnailDataUrl = await gerarThumbnail(arquivoFinal);
+        const resultado = await enviarMidiaDireto(arquivoFinal, { bucket: "story-media", pasta: `ciclo/${categoria.id}` });
         enviados.push({ ...resultado, thumbnailDataUrl });
       }
       const json = await chamarApi(`/api/ciclo-categorias/${categoria.id}/itens`, {
