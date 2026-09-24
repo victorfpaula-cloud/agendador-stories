@@ -14,6 +14,12 @@ export const maxDuration = 60;
 // o mesmo horário duas vezes nem pular o horário por 1-2 minutos de diferença.
 const TOLERANCIA_MINUTOS = 15;
 
+// Só manda e-mail de erro depois de esgotar as tentativas — uma falha
+// passageira (instabilidade da Graph API, por exemplo) tem grande chance de
+// se resolver sozinha no próximo ciclo do cron, 5 minutos depois. Avisar
+// Victor a cada tentativa isolada seria alarme falso na maioria das vezes.
+const LIMITE_TENTATIVAS = 3;
+
 export async function GET(req: NextRequest) {
   return executar(req);
 }
@@ -82,11 +88,11 @@ async function executar(req: NextRequest) {
         p_account_id: conta.id,
         p_scheduled_for: dataISO,
       })
-      .single<{ reivindicado: boolean; primeira_tentativa: boolean }>();
+      .single<{ reivindicado: boolean; tentativas: number }>();
 
     if (erroReivindicar || !reivindicacao?.reivindicado) continue;
 
-    const primeiraTentativa = reivindicacao.primeira_tentativa;
+    const tentativas = reivindicacao.tentativas;
 
     try {
       const igMediaId = await publicarStory({
@@ -114,18 +120,17 @@ async function executar(req: NextRequest) {
 
       resultados.push({ slotId: slot.id, conta: conta.name, status: "error", detalhe: msg });
 
-      // Só na primeira tentativa do dia pra esse horário — sem isso, uma
-      // falha persistente mandaria um e-mail a cada nova retentativa dentro
-      // da janela de tolerância, em vez de só uma vez.
-      if (primeiraTentativa) {
+      // Só avisa por e-mail depois de esgotar as tentativas — antes disso,
+      // o próprio cron tenta de novo sozinho no próximo ciclo (5 em 5 min,
+      // dentro da janela de tolerância de ${TOLERANCIA_MINUTOS} min).
+      if (tentativas >= LIMITE_TENTATIVAS) {
         await enviarEmail({
           assunto: `Erro ao publicar Story — ${conta.name}`,
           corpo:
             `A conta "${conta.name}" teve um erro ao tentar publicar o Story agendado pra hoje ` +
-            `(${dataISO}), horário ${slot.time_of_day.slice(0, 5)}.\n\n` +
+            `(${dataISO}), horário ${slot.time_of_day.slice(0, 5)}, depois de ${tentativas} tentativas.\n\n` +
             `Erro: ${msg}\n\n` +
-            `O cron continua tentando de novo por até ${TOLERANCIA_MINUTOS} minutos — se não conseguir, ` +
-            `publica esse Story manualmente.`,
+            `Publica esse Story manualmente.`,
         });
       }
     }

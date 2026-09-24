@@ -25,6 +25,12 @@ function formatarDataHoraSaoPaulo(iso: string): string {
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
+// Uma falha só volta pra 'pending' (o próximo ciclo do cron, 5 min depois,
+// tenta de novo sozinho) até esgotar essa quantidade de tentativas — só aí
+// vira 'error' de verdade e manda o e-mail. Evita alarme falso por uma
+// instabilidade passageira da Graph API.
+const LIMITE_TENTATIVAS = 3;
+
 export async function GET(req: NextRequest) {
   return executar(req);
 }
@@ -57,6 +63,34 @@ async function executar(req: NextRequest) {
 
   const resultados: Array<{ storyId: string; status: string; detalhe?: string }> = [];
 
+  // Marca uma falha: se ainda não esgotou as tentativas, volta pra
+  // 'pending' (o próximo ciclo do cron tenta de novo sozinho); só manda
+  // e-mail quando já é a tentativa definitiva.
+  async function falharTentativa(item: StoryPost, conta: Account, msg: string) {
+    const tentativas = (item.tentativas ?? 0) + 1;
+    const esgotou = tentativas >= LIMITE_TENTATIVAS;
+
+    await admin
+      .from("story_posts")
+      .update({ status: esgotou ? "error" : "pending", tentativas, error_message: msg })
+      .eq("id", item.id);
+
+    resultados.push({ storyId: item.id, status: esgotou ? "error" : "pending", detalhe: msg });
+
+    if (!esgotou) return;
+
+    await enviarEmail({
+      assunto: `Erro ao publicar Story automático (Drive) — ${conta.name}`,
+      corpo:
+        // scheduled_at nunca é nulo aqui — a consulta acima já filtra por
+        // "lte scheduled_at" (que nunca bate contra null no Postgres).
+        `A conta "${conta.name}" teve um erro ao tentar publicar um Story automático do Drive agendado ` +
+        `pra ${formatarDataHoraSaoPaulo(item.scheduled_at as string)}, depois de ${tentativas} tentativas.\n\n` +
+        `Erro: ${msg}\n\n` +
+        `Publica esse Story manualmente.`,
+    });
+  }
+
   for (const item of (devidos ?? []) as (StoryPost & { accounts: Account })[]) {
     // Reivindica antes de publicar (update condicional em status='pending'):
     // se dois ciclos do cron se sobrepuserem, só um consegue "ganhar" o
@@ -76,16 +110,12 @@ async function executar(req: NextRequest) {
     const conta = item.accounts;
 
     if (!conta.is_active) {
-      const msg = "Conta está pausada — retome a conta pra publicar o Story.";
-      await admin.from("story_posts").update({ status: "error", error_message: msg }).eq("id", item.id);
-      resultados.push({ storyId: item.id, status: "error", detalhe: msg });
+      await falharTentativa(item, conta, "Conta está pausada — retome a conta pra publicar o Story.");
       continue;
     }
 
     if (!item.media_url) {
-      const msg = "A mídia original já não está mais disponível pra publicar (estado inesperado).";
-      await admin.from("story_posts").update({ status: "error", error_message: msg }).eq("id", item.id);
-      resultados.push({ storyId: item.id, status: "error", detalhe: msg });
+      await falharTentativa(item, conta, "A mídia original já não está mais disponível pra publicar (estado inesperado).");
       continue;
     }
 
@@ -119,23 +149,7 @@ async function executar(req: NextRequest) {
       resultados.push({ storyId: item.id, status: "success" });
     } catch (err) {
       const msg = err instanceof MetaApiError || err instanceof Error ? err.message : "Erro desconhecido";
-
-      await admin.from("story_posts").update({ status: "error", error_message: msg }).eq("id", item.id);
-      resultados.push({ storyId: item.id, status: "error", detalhe: msg });
-
-      // Diferente do motor semanal, um story_posts nunca é tentado de novo
-      // depois de sair de 'pending' — então essa falha é definitiva, e um
-      // e-mail por Story basta, sem risco de mandar duplicado numa retentativa.
-      await enviarEmail({
-        assunto: `Erro ao publicar Story automático (Drive) — ${conta.name}`,
-        corpo:
-          // scheduled_at nunca é nulo aqui — a consulta acima já filtra por
-          // "lte scheduled_at" (que nunca bate contra null no Postgres).
-          `A conta "${conta.name}" teve um erro ao tentar publicar um Story automático do Drive agendado ` +
-          `pra ${formatarDataHoraSaoPaulo(item.scheduled_at as string)}.\n\n` +
-          `Erro: ${msg}\n\n` +
-          `Publica esse Story manualmente enquanto isso.`,
-      });
+      await falharTentativa(item, conta, msg);
     }
   }
 
