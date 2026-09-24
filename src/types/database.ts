@@ -48,6 +48,9 @@ export interface PublishLog {
   status: "success" | "error" | "publishing";
   ig_media_id: string | null;
   error_message: string | null;
+  // Quantas vezes já tentou publicar esse horário hoje — só manda e-mail de
+  // erro depois de esgotar (ver LIMITE_TENTATIVAS em /api/cron/run).
+  tentativas: number;
   created_at: string;
 }
 
@@ -115,6 +118,10 @@ export interface FeedPostAccount {
   ig_media_id: string | null;
   error_message: string | null;
   published_at: string | null;
+  // Quantas vezes já tentou publicar nessa conta — só marca "error" (e
+  // entra no e-mail) depois de esgotar (ver LIMITE_TENTATIVAS em
+  // /api/cron/publicar-feed).
+  tentativas: number;
   created_at: string;
 }
 
@@ -232,6 +239,10 @@ export interface StoryCicloPost {
   status: StoryCicloPostStatus;
   ig_media_id: string | null;
   error_message: string | null;
+  // Quantas vezes já tentou publicar esse Story — só marca "error" (e
+  // manda e-mail) depois de esgotar (ver LIMITE_TENTATIVAS em
+  // /api/cron/publicar-stories-ciclo).
+  tentativas: number;
   published_at: string | null;
   created_at: string;
 }
@@ -260,6 +271,10 @@ export interface StoryPost {
   status: StoryPostStatus;
   ig_media_id: string | null;
   error_message: string | null;
+  // Quantas vezes já tentou publicar esse Story — só marca "error" (e
+  // manda e-mail) depois de esgotar (ver LIMITE_TENTATIVAS em
+  // /api/cron/publicar-stories-drive).
+  tentativas: number;
   published_at: string | null;
   created_at: string;
 }

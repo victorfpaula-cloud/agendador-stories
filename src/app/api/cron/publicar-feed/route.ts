@@ -24,6 +24,13 @@ function formatarDataHoraSaoPaulo(iso: string): string {
 // (foto avulsa, Reels, carrossel) já publicam de verdade.
 export const dynamic = "force-dynamic";
 
+// Uma falha numa conta-alvo só volta pra 'pending' (o próximo ciclo do
+// cron, 5 min depois, tenta de novo sozinho pra essa conta) até esgotar
+// essa quantidade de tentativas — só aí vira 'error' de verdade pra essa
+// conta e entra no e-mail. Contas que já publicaram com sucesso não são
+// re-tentadas.
+const LIMITE_TENTATIVAS = 3;
+
 export async function GET(req: NextRequest) {
   return executar(req);
 }
@@ -73,6 +80,9 @@ async function executar(req: NextRequest) {
     // pra foto/Reels avulso é só a mídia única, na position 0.
     const midias = [...((post.feed_post_media ?? []) as FeedPostMedia[])].sort((a, b) => a.position - b.position);
     const contasAlvo = (post.feed_post_accounts ?? []) as (FeedPostAccount & { accounts: Account })[];
+    // Só as que ainda estão 'pending' — as que já publicaram ('success') ou
+    // já esgotaram as tentativas ('error') não são tocadas de novo.
+    const contasParaTentar = contasAlvo.filter((c) => c.status === "pending");
 
     if (midias.length === 0) {
       await admin
@@ -102,21 +112,36 @@ async function executar(req: NextRequest) {
     }
     const midiasComUrl = midias as (FeedPostMedia & { media_url: string })[];
 
-    let algumSucesso = false;
-    let algumErro = false;
+    // Seeds a partir do estado que já veio de rodadas anteriores (posts
+    // retentados passam por aqui de novo) — accounts 'success'/'error' de
+    // antes contam pro resultado final mesmo que não sejam re-tentadas
+    // nesta rodada.
+    let algumSucesso = contasAlvo.some((c) => c.status === "success");
+    let algumErroDefinitivo = contasAlvo.some((c) => c.status === "error");
+    let aindaPendente = false;
     const falhasPorConta: { conta: string; mensagem: string }[] = [];
 
-    for (const contaAlvo of contasAlvo) {
+    async function falharTentativaConta(contaAlvo: FeedPostAccount, conta: Account, mensagem: string) {
+      const tentativas = (contaAlvo.tentativas ?? 0) + 1;
+      const esgotou = tentativas >= LIMITE_TENTATIVAS;
+      await admin
+        .from("feed_post_accounts")
+        .update({ status: esgotou ? "error" : "pending", tentativas, error_message: mensagem })
+        .eq("id", contaAlvo.id);
+
+      if (esgotou) {
+        algumErroDefinitivo = true;
+        falhasPorConta.push({ conta: conta.name, mensagem });
+      } else {
+        aindaPendente = true;
+      }
+    }
+
+    for (const contaAlvo of contasParaTentar) {
       const conta = contaAlvo.accounts;
 
       if (!conta.is_active) {
-        const mensagem = "Conta está pausada — retome a conta pra publicar nela.";
-        await admin
-          .from("feed_post_accounts")
-          .update({ status: "error", error_message: mensagem })
-          .eq("id", contaAlvo.id);
-        algumErro = true;
-        falhasPorConta.push({ conta: conta.name, mensagem });
+        await falharTentativaConta(contaAlvo, conta, "Conta está pausada — retome a conta pra publicar nela.");
         continue;
       }
 
@@ -151,30 +176,27 @@ async function executar(req: NextRequest) {
         algumSucesso = true;
       } catch (err) {
         const msg = err instanceof MetaApiError || err instanceof Error ? err.message : "Erro desconhecido";
-        await admin
-          .from("feed_post_accounts")
-          .update({ status: "error", error_message: msg })
-          .eq("id", contaAlvo.id);
-        algumErro = true;
-        falhasPorConta.push({ conta: conta.name, mensagem: msg });
+        await falharTentativaConta(contaAlvo, conta, msg);
       }
     }
 
-    // Status final do post: só "success" se TODAS as contas-alvo publicaram.
-    const statusFinal = algumErro ? "error" : "success";
+    // Status final do post: "pending" enquanto sobrar conta ainda
+    // tentando, "success" só se TODAS as contas-alvo publicaram, "error" se
+    // pelo menos uma esgotou as tentativas.
+    const statusFinal = aindaPendente ? "pending" : algumErroDefinitivo ? "error" : "success";
     await admin
       .from("feed_posts")
       .update({
         status: statusFinal,
         published_at: algumSucesso ? new Date().toISOString() : null,
-        error_message: algumErro ? "Falhou em pelo menos uma conta-alvo — veja o detalhe por conta." : null,
+        error_message: algumErroDefinitivo ? "Falhou em pelo menos uma conta-alvo — veja o detalhe por conta." : null,
       })
       .eq("id", post.id);
 
-    // Diferente dos Stories, um post do Feed nunca é tentado de novo depois
-    // de sair de 'pending' (ver query no início desta rota) — então essa
-    // falha é definitiva, e um e-mail só por post é o suficiente, sem risco
-    // de mandar duplicado numa retentativa.
+    // Só manda e-mail quando o post realmente chegou num estado final
+    // ("error" só acontece depois de esgotar as tentativas de cada conta
+    // que falhou) — enquanto estiver "pending" o próximo ciclo do cron
+    // tenta de novo sozinho, sem alarme falso por uma falha passageira.
     if (statusFinal === "error") {
       await enviarEmail({
         assunto: `Erro ao publicar no Feed — ${post.media_type}`,

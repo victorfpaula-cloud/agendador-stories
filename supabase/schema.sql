@@ -149,3 +149,9 @@ create policy "Leitura publica story-media"
 -- escolher aleatoriamente entre os itens nunca usados (em vez de sempre
 -- pela ordem de upload): rode supabase/story-ciclo-pausa-e-sorteio.sql
 -- também numa instalação nova do zero (depois do story-ciclo.sql).
+
+-- Os 4 motores de publicação (Stories semanal, AutoFeed, AutoStory,
+-- CicloStory) só mandam e-mail de erro depois de esgotar 3 tentativas —
+-- antes disso, o próprio cron tenta de novo sozinho no próximo ciclo:
+-- rode supabase/retry-antes-de-email-de-erro.sql também numa instalação
+-- nova do zero.

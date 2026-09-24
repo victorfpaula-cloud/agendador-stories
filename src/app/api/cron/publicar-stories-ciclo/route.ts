@@ -21,6 +21,11 @@ function formatarDataHoraSaoPaulo(iso: string): string {
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
+// Uma falha só volta pra 'pending' (o próximo ciclo do cron, 5 min depois,
+// tenta de novo sozinho) até esgotar essa quantidade de tentativas — só aí
+// vira 'error' de verdade e manda o e-mail.
+const LIMITE_TENTATIVAS = 3;
+
 export async function GET(req: NextRequest) {
   return executar(req);
 }
@@ -53,6 +58,29 @@ async function executar(req: NextRequest) {
 
   const resultados: Array<{ postId: string; status: string; detalhe?: string }> = [];
 
+  async function falharTentativa(item: StoryCicloPost, conta: Account, msg: string) {
+    const tentativas = (item.tentativas ?? 0) + 1;
+    const esgotou = tentativas >= LIMITE_TENTATIVAS;
+
+    await admin
+      .from("story_ciclo_posts")
+      .update({ status: esgotou ? "error" : "pending", tentativas, error_message: msg })
+      .eq("id", item.id);
+
+    resultados.push({ postId: item.id, status: esgotou ? "error" : "pending", detalhe: msg });
+
+    if (!esgotou) return;
+
+    await enviarEmail({
+      assunto: `Erro ao publicar Story do CicloStory — ${conta.name}`,
+      corpo:
+        `A conta "${conta.name}" teve um erro ao tentar publicar um Story do CicloStory agendado ` +
+        `pra ${formatarDataHoraSaoPaulo(item.scheduled_at)}, depois de ${tentativas} tentativas.\n\n` +
+        `Erro: ${msg}\n\n` +
+        `Publica esse Story manualmente.`,
+    });
+  }
+
   for (const item of (devidos ?? []) as (StoryCicloPost & { accounts: Account })[]) {
     const { data: reivindicado } = await admin
       .from("story_ciclo_posts")
@@ -66,16 +94,12 @@ async function executar(req: NextRequest) {
     const conta = item.accounts;
 
     if (!conta.is_active) {
-      const msg = "Conta está pausada — retome a conta pra publicar o Story.";
-      await admin.from("story_ciclo_posts").update({ status: "error", error_message: msg }).eq("id", item.id);
-      resultados.push({ postId: item.id, status: "error", detalhe: msg });
+      await falharTentativa(item, conta, "Conta está pausada — retome a conta pra publicar o Story.");
       continue;
     }
 
     if (!item.media_url) {
-      const msg = "A mídia original já não está mais disponível pra publicar (estado inesperado).";
-      await admin.from("story_ciclo_posts").update({ status: "error", error_message: msg }).eq("id", item.id);
-      resultados.push({ postId: item.id, status: "error", detalhe: msg });
+      await falharTentativa(item, conta, "A mídia original já não está mais disponível pra publicar (estado inesperado).");
       continue;
     }
 
@@ -109,18 +133,7 @@ async function executar(req: NextRequest) {
       resultados.push({ postId: item.id, status: "success" });
     } catch (err) {
       const msg = err instanceof MetaApiError || err instanceof Error ? err.message : "Erro desconhecido";
-
-      await admin.from("story_ciclo_posts").update({ status: "error", error_message: msg }).eq("id", item.id);
-      resultados.push({ postId: item.id, status: "error", detalhe: msg });
-
-      await enviarEmail({
-        assunto: `Erro ao publicar Story do CicloStory — ${conta.name}`,
-        corpo:
-          `A conta "${conta.name}" teve um erro ao tentar publicar um Story do CicloStory agendado ` +
-          `pra ${formatarDataHoraSaoPaulo(item.scheduled_at)}.\n\n` +
-          `Erro: ${msg}\n\n` +
-          `Publica esse Story manualmente enquanto isso.`,
-      });
+      await falharTentativa(item, conta, msg);
     }
   }
 
