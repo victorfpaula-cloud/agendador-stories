@@ -155,3 +155,11 @@ create policy "Leitura publica story-media"
 -- antes disso, o próprio cron tenta de novo sozinho no próximo ciclo:
 -- rode supabase/retry-antes-de-email-de-erro.sql também numa instalação
 -- nova do zero.
+
+-- Os crons de publicação (4) e de geração de conteúdo (2) foram
+-- consolidados em 1 rota cada (/api/cron/publicar-tudo e
+-- /api/cron/gerar-tudo) pra reduzir o "Fluid Active CPU" gasto com
+-- inicialização repetida na Vercel — lógica de cada motor continua isolada
+-- em src/lib/engines/*, só o disparo virou um só: rode
+-- supabase/cron-consolidado.sql também numa instalação nova do zero
+-- (trocando <CRON_SECRET> pelo valor real).
