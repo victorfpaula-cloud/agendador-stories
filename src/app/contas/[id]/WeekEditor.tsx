@@ -314,10 +314,10 @@ function LinhaFantasmaStoryEngine({ item, status }: { item: StoryEngineSlot; sta
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-indigo-50 text-indigo-500">
           <IconeStoryEngine className="h-5 w-5" />
         </span>
-        <p className="min-w-0 flex-1 truncate text-sm text-slate-500">
+        <span className="shrink-0 text-sm text-slate-700">{item.horario.slice(0, 5)}</span>
+        <p className="ml-auto min-w-0 truncate text-right text-xs text-slate-500">
           <span className="font-medium text-slate-600">Story Engine</span> · {item.categoriaNome}
         </p>
-        <span className="shrink-0 text-xs text-slate-400">{item.horario.slice(0, 5)}</span>
       </div>
     </div>
   );
