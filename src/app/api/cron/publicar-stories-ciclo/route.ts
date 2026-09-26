@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { executarPublicarStoriesCiclo } from "@/lib/engines/publicarStoriesCiclo";
 
-// Motor de publicação do CicloStory — a lógica de verdade vive em
+// Motor de publicação do Story Engine — a lógica de verdade vive em
 // src/lib/engines/publicarStoriesCiclo.ts (compartilhada com o cron
 // combinado /api/cron/publicar-tudo, que é quem o pg_cron chama de 5 em 5
 // min de verdade). Esta rota continua existindo pra debug/retry manual

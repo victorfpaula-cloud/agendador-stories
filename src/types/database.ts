@@ -184,7 +184,7 @@ export interface StoryDriveExecucao {
   created_at: string;
 }
 
-// ---------- CicloStory (banco de imagens por categoria, gira sem repetir) ----------
+// ---------- Story Engine (banco de imagens por categoria, gira sem repetir) ----------
 // Módulo isolado de AutoFeed/AutoStory — pedido explícito do Victor pra não
 // misturar por baixo dos panos. Cada categoria já é o "slot": tem nome,
 // dias da semana ativos, uma lista de horários e uma galeria de

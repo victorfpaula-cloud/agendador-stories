@@ -53,6 +53,53 @@ export default async function ContaPage({ params }: { params: { id: string } }) 
     }
   }
 
+  // "Containerzinho fantasma" do Story Engine nos dias da semana (pedido do
+  // Victor em 26/09/2026) — mostra os horários configurados lá (categoria
+  // ativa + horário ativo), sem imagem própria (a mídia só é escolhida na
+  // hora que o robô roda), só como aviso visual do que vai sair naquele
+  // dia. Duas consultas simples em vez de um join embutido de propósito:
+  // sem tipos gerados do banco, o supabase-js infere embed como array
+  // mesmo sendo N:1, o que já deu erro de build antes (ver
+  // /api/cron/gerar-stories-ciclo).
+  const { data: storyEngineHorarios } = await admin
+    .from("story_ciclo_horario")
+    .select("id, horario, category_id")
+    .eq("is_active", true);
+
+  const { data: storyEngineCategorias } = await admin
+    .from("story_ciclo_categoria")
+    .select("id, nome, dias_semana")
+    .eq("account_id", params.id)
+    .eq("ativa", true);
+
+  const categoriasPorId = new Map<string, { nome: string; dias_semana: number[] }>(
+    ((storyEngineCategorias ?? []) as { id: string; nome: string; dias_semana: number[] }[]).map((c) => [
+      c.id,
+      { nome: c.nome, dias_semana: c.dias_semana },
+    ])
+  );
+
+  const storyEngineSlots = ((storyEngineHorarios ?? []) as { id: string; horario: string; category_id: string }[])
+    .map((h) => {
+      const categoria = categoriasPorId.get(h.category_id);
+      if (!categoria) return null; // categoria de outra conta, ou pausada
+      return { id: h.id, horario: h.horario, categoriaNome: categoria.nome, diasSemana: categoria.dias_semana };
+    })
+    .filter((s): s is { id: string; horario: string; categoriaNome: string; diasSemana: number[] } => s !== null);
+
+  const { data: storyEnginePostsHoje } = await admin
+    .from("story_ciclo_posts")
+    .select("horario_id, status")
+    .eq("account_id", params.id)
+    .eq("dia", dataISO);
+
+  const storyEngineStatusHoje: Record<string, "success" | "error"> = {};
+  for (const post of (storyEnginePostsHoje ?? []) as { horario_id: string | null; status: string }[]) {
+    if (post.horario_id && (post.status === "success" || post.status === "error")) {
+      storyEngineStatusHoje[post.horario_id] = post.status;
+    }
+  }
+
   return (
     <main className="mx-auto max-w-6xl px-4 py-10">
       <div className="mb-8 flex items-start justify-between gap-3">
@@ -88,6 +135,8 @@ export default async function ContaPage({ params }: { params: { id: string } }) 
         initialSlots={(slots ?? []) as ScheduleSlot[]}
         diaHoje={diaSemanaIso}
         logsHoje={logsHoje}
+        storyEngineSlots={storyEngineSlots}
+        storyEngineStatusHoje={storyEngineStatusHoje}
       />
     </main>
   );
