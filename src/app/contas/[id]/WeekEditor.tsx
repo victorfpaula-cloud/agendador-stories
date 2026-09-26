@@ -305,7 +305,9 @@ function LinhaSalva({
 // ser postado naquele dia, sem mídia (a imagem só é escolhida na hora que
 // o robô roda) e sem botão de editar/remover (isso é feito na aba do Story
 // Engine). Igual aos horários normais, a bolinha de status só aparece no
-// dia de hoje.
+// dia de hoje. Mesmas 4 colunas de LinhaSalva (ícone, horário, rótulo,
+// texto à direita) — só assim o horário fica alinhado de verdade com os
+// outros itens (mesma caixinha, mesmo padding, não só texto solto).
 function LinhaFantasmaStoryEngine({ item, status }: { item: StoryEngineSlot; status?: StatusHoje }) {
   return (
     <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50/60 p-2.5">
@@ -314,10 +316,11 @@ function LinhaFantasmaStoryEngine({ item, status }: { item: StoryEngineSlot; sta
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-indigo-50 text-indigo-500">
           <IconeStoryEngine className="h-5 w-5" />
         </span>
-        <span className="shrink-0 text-sm text-slate-700">{item.horario.slice(0, 5)}</span>
-        <p className="ml-auto min-w-0 truncate text-right text-xs text-slate-500">
-          <span className="font-medium text-slate-600">Story Engine</span> · {item.categoriaNome}
-        </p>
+        <span className="rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-700">
+          {item.horario.slice(0, 5)}
+        </span>
+        <span className="text-xs font-medium text-indigo-600">Story Engine</span>
+        <span className="ml-auto min-w-0 shrink truncate text-xs text-slate-500">{item.categoriaNome}</span>
       </div>
     </div>
   );

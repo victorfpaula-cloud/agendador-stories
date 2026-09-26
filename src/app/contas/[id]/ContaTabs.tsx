@@ -106,20 +106,16 @@ function IconeAutoStory({ className }: IconeProps) {
   );
 }
 
-// Setas cruzadas (shuffle) — representa embaralhar/sortear entre as
-// imagens da categoria, que é literalmente o que o Story Engine faz. Troca
-// da engrenagem anterior (Victor achou parecida com vírus). Exportado
-// porque a tela de Stories normal (WeekEditor.tsx) também usa esse ícone
-// nos "containerzinhos fantasma" que mostram o que o Story Engine vai
-// postar naquele dia.
+// Raio — remete a motor/potência (pedido do Victor: "algo relacionado a
+// potência, motor"), num traço limpo e único, sem picos nem partes soltas
+// (as duas tentativas anteriores — engrenagem cheia de dentes e setas de
+// shuffle — não agradaram). Exportado porque a tela de Stories normal
+// (WeekEditor.tsx) também usa esse ícone nos "containerzinhos fantasma" que
+// mostram o que o Story Engine vai postar naquele dia.
 export function IconeStoryEngine({ className }: IconeProps) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <polyline points="16 3 21 3 21 8" />
-      <line x1="4" y1="20" x2="21" y2="3" />
-      <polyline points="21 16 21 21 16 21" />
-      <line x1="15" y1="15" x2="21" y2="21" />
-      <line x1="4" y1="4" x2="9" y2="9" />
+      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
     </svg>
   );
 }
