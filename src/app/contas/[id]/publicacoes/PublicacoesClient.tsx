@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { enviarMidiaDireto } from "@/lib/uploadDireto";
 import { gerarThumbnail } from "@/lib/thumbnail";
+import { prepararImagem } from "@/lib/imagemCliente";
 import type { FeedPostComDetalhes, FeedPostStatus } from "@/types/database";
 
 const BUCKET = "feed-media";
@@ -194,8 +195,9 @@ function ComporPost({
       const midias: { url: string; path: string; mediaType: string; thumbnailDataUrl: string | null }[] = [];
       for (let i = 0; i < files.length; i++) {
         setProgresso(files.length > 1 ? `Enviando arquivo ${i + 1} de ${files.length}…` : "Enviando mídia…");
-        const midia = await enviarMidiaDireto(files[i], { bucket: BUCKET, pasta: "manual" });
-        const thumbnailDataUrl = await gerarThumbnail(files[i]);
+        const arquivoFinal = await prepararImagem(files[i]);
+        const midia = await enviarMidiaDireto(arquivoFinal, { bucket: BUCKET, pasta: "manual" });
+        const thumbnailDataUrl = await gerarThumbnail(arquivoFinal);
         midias.push({ ...midia, thumbnailDataUrl });
       }
 
