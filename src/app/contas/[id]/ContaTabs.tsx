@@ -106,17 +106,20 @@ function IconeAutoStory({ className }: IconeProps) {
   );
 }
 
-// Engrenagem (o "motor" do Story Engine) com um cartãozinho de Story no
-// centro no lugar do parafuso — troca do ícone antigo (fotos empilhadas),
-// que não tinha ficado bom junto com o nome novo. Exportado porque a tela
-// de Stories normal (WeekEditor.tsx) também usa esse ícone nos
-// "containerzinhos fantasma" que mostram o que o Story Engine vai postar
-// naquele dia.
+// Setas cruzadas (shuffle) — representa embaralhar/sortear entre as
+// imagens da categoria, que é literalmente o que o Story Engine faz. Troca
+// da engrenagem anterior (Victor achou parecida com vírus). Exportado
+// porque a tela de Stories normal (WeekEditor.tsx) também usa esse ícone
+// nos "containerzinhos fantasma" que mostram o que o Story Engine vai
+// postar naquele dia.
 export function IconeStoryEngine({ className }: IconeProps) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-      <rect x="10.3" y="9.3" width="3.4" height="5.4" rx="0.8" fill="currentColor" stroke="none" />
+      <polyline points="16 3 21 3 21 8" />
+      <line x1="4" y1="20" x2="21" y2="3" />
+      <polyline points="21 16 21 21 16 21" />
+      <line x1="15" y1="15" x2="21" y2="21" />
+      <line x1="4" y1="4" x2="9" y2="9" />
     </svg>
   );
 }
