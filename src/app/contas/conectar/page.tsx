@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { PendingConnectionPage } from "@/types/database";
 import { conectarPagina } from "./actions";
+import { GlassButton } from "@/components/Glass";
 
 export default async function ConectarPage({
   searchParams,
@@ -51,12 +52,9 @@ export default async function ConectarPage({
                 {p.ig_username ? `@${p.ig_username}` : "conta do Instagram vinculada"}
               </p>
             </div>
-            <button
-              type="submit"
-              className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-600"
-            >
+            <GlassButton type="submit" className="h-9 px-4 text-sm font-semibold">
               Conectar
-            </button>
+            </GlassButton>
           </form>
         ))}
       </div>

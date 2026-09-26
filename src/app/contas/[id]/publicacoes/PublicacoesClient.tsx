@@ -4,6 +4,7 @@ import { useState } from "react";
 import { enviarMidiaDireto } from "@/lib/uploadDireto";
 import { gerarThumbnail } from "@/lib/thumbnail";
 import type { FeedPostComDetalhes, FeedPostStatus } from "@/types/database";
+import { GlassButton } from "@/components/Glass";
 
 const BUCKET = "feed-media";
 
@@ -309,14 +310,14 @@ function ComporPost({
           />
         </label>
 
-        <button
+        <GlassButton
           type="button"
           onClick={publicar}
           disabled={enviando}
-          className="w-full rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
+          className="h-11 w-full text-sm font-semibold"
         >
           {enviando ? progresso ?? "Agendando…" : "Agendar publicação"}
-        </button>
+        </GlassButton>
 
         {erro && <p className="text-xs text-red-600">{erro}</p>}
       </div>
@@ -580,14 +581,9 @@ function EditarPost({
         </label>
 
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={salvar}
-            disabled={salvando}
-            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
-          >
+          <GlassButton type="button" onClick={salvar} disabled={salvando} className="h-9 px-4 text-sm font-semibold">
             {salvando ? "Salvando…" : "Salvar"}
-          </button>
+          </GlassButton>
           <button
             type="button"
             onClick={onCancelar}

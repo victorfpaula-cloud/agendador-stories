@@ -6,6 +6,7 @@ import { prepararImagem } from "@/lib/imagemCliente";
 import { enviarMidiaDireto } from "@/lib/uploadDireto";
 import { gerarThumbnail } from "@/lib/thumbnail";
 import type { StoryCicloCategoria, StoryCicloHorario, StoryCicloItem } from "@/types/database";
+import { GlassButton, GlassSurface } from "@/components/Glass";
 
 export type CategoriaComHorarios = StoryCicloCategoria & { story_ciclo_horario: StoryCicloHorario[] };
 export type Contagem = { total: number; usadas: number };
@@ -133,14 +134,9 @@ export default function CicloClient({
           </label>
           {erroNovo && <p className="mt-1.5 text-xs text-red-600">{erroNovo}</p>}
           <div className="mt-3 flex gap-2">
-            <button
-              type="button"
-              onClick={criarCategoria}
-              disabled={salvandoNovo}
-              className="rounded-lg bg-brand-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
-            >
+            <GlassButton type="button" onClick={criarCategoria} disabled={salvandoNovo} className="h-8 px-4 text-sm font-semibold">
               {salvandoNovo ? "Criando…" : "Criar"}
-            </button>
+            </GlassButton>
             <button
               type="button"
               onClick={() => {
@@ -426,17 +422,19 @@ function CategoriaCard({
           {DIAS_SEMANA.map((dia) => {
             const ativo = categoria.dias_semana.includes(dia.value);
             return (
-              <button
+              <GlassButton
                 key={dia.value}
                 type="button"
                 onClick={() => alternarDia(dia.value)}
                 disabled={salvandoDias}
-                className={`rounded-full px-2.5 py-1 text-xs font-medium transition disabled:opacity-60 ${
-                  ativo ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-400"
-                }`}
+                blur={6}
+                scale={-12}
+                tint={ativo ? "linear-gradient(180deg, rgba(129,140,248,.48), rgba(61,84,224,.74))" : "rgba(255,255,255,.4)"}
+                className="h-6 px-2.5 text-xs font-medium"
+                style={{ color: ativo ? "#fff" : "#94a3b8" }}
               >
                 {dia.curto}
-              </button>
+              </GlassButton>
             );
           })}
         </div>
