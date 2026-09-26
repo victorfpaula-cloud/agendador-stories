@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { executarGeracaoStoriesCiclo } from "@/lib/storyCicloGeracao";
 
-// Cron do CicloStory — a lógica de verdade vive em
+// Cron do Story Engine — a lógica de verdade vive em
 // src/lib/storyCicloGeracao.ts (compartilhada com o cron combinado
 // /api/cron/gerar-tudo, que é quem o pg_cron chama de 30 em 30 min de
 // verdade). Esta rota continua existindo pra debug/retry manual isolado.

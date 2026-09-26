@@ -5,26 +5,29 @@ import { usePathname } from "next/navigation";
 
 // Navegação em botões dentro de uma conta — Stories (rotina semanal, URL
 // permanece a mesma de sempre: /contas/[id]), Agendamento de Publicações
-// (feed/Reels/carrossel), AutoFeed (automação do Drive pro Feed) e
-// AutoStory (automação do Drive pra Stories). "AutoFeed"/"AutoStory" são os
-// nomes que o Victor escolheu (17/09/2026) — "Automação do Drive" e "Story
-// Automático Drive" estavam confundindo ele na hora de diferenciar os dois.
-// Cada botão tem seu próprio ícone só pra reforçar visualmente a diferença.
+// (feed/Reels/carrossel), AutoFeed (automação do Drive pro Feed), AutoStory
+// (automação do Drive pra Stories) e Story Engine (banco de imagens por
+// categoria que gira sem repetir). "AutoFeed"/"AutoStory" são os nomes que
+// o Victor escolheu em 17/09/2026; "Story Engine" é o nome que escolheu em
+// 26/09/2026 pro módulo que antes se chamava "CicloStory" (não pegou bem —
+// a URL/rotas internas continuam usando "ciclo" por trás, só o nome
+// visível mudou). Cada botão tem seu próprio ícone só pra reforçar
+// visualmente a diferença.
 export default function ContaTabs({ accountId }: { accountId: string }) {
   const pathname = usePathname();
   const base = `/contas/${accountId}`;
   const emAutoFeed = pathname?.startsWith(`${base}/publicacoes/drive`);
   const emPublicacoes = pathname?.startsWith(`${base}/publicacoes`) && !emAutoFeed;
   const emAutoStory = pathname?.startsWith(`${base}/stories-drive`);
-  const emCicloStory = pathname?.startsWith(`${base}/stories-ciclo`);
-  const emStories = !emPublicacoes && !emAutoFeed && !emAutoStory && !emCicloStory;
+  const emStoryEngine = pathname?.startsWith(`${base}/stories-ciclo`);
+  const emStories = !emPublicacoes && !emAutoFeed && !emAutoStory && !emStoryEngine;
 
   const abas = [
     { href: base, label: "Stories", ativo: emStories, Icone: IconeStories },
     { href: `${base}/publicacoes`, label: "Publicações", ativo: !!emPublicacoes, Icone: IconePublicacoes },
     { href: `${base}/publicacoes/drive`, label: "AutoFeed", ativo: !!emAutoFeed, Icone: IconeAutoFeed },
     { href: `${base}/stories-drive`, label: "AutoStory", ativo: !!emAutoStory, Icone: IconeAutoStory },
-    { href: `${base}/stories-ciclo`, label: "CicloStory", ativo: !!emCicloStory, Icone: IconeCicloStory },
+    { href: `${base}/stories-ciclo`, label: "Story Engine", ativo: !!emStoryEngine, Icone: IconeStoryEngine },
   ];
 
   return (
@@ -103,16 +106,17 @@ function IconeAutoStory({ className }: IconeProps) {
   );
 }
 
-// Fotos empilhadas com uma setinha de ciclo no canto — banco de imagens que
-// gira sem repetir (CicloStory), distinto do robô do AutoStory e das setas
-// em ciclo "cheias" do AutoFeed.
-function IconeCicloStory({ className }: IconeProps) {
+// Engrenagem (o "motor" do Story Engine) com um cartãozinho de Story no
+// centro no lugar do parafuso — troca do ícone antigo (fotos empilhadas),
+// que não tinha ficado bom junto com o nome novo. Exportado porque a tela
+// de Stories normal (WeekEditor.tsx) também usa esse ícone nos
+// "containerzinhos fantasma" que mostram o que o Story Engine vai postar
+// naquele dia.
+export function IconeStoryEngine({ className }: IconeProps) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <rect x="3" y="6" width="12" height="12" rx="2" />
-      <path d="M7 6V4.8A1.8 1.8 0 0 1 8.8 3h9.4A1.8 1.8 0 0 1 20 4.8v9.4a1.8 1.8 0 0 1-1.8 1.8H17" />
-      <path d="M17.5 9.5a3 3 0 0 0-5-1.3M9.5 12.5a3 3 0 0 0 5 1.3" />
-      <path d="M12.3 7.9l.2 1.6-1.6-.3M11.7 14.1l-.2-1.6 1.6.3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+      <rect x="10.3" y="9.3" width="3.4" height="5.4" rx="0.8" fill="currentColor" stroke="none" />
     </svg>
   );
 }

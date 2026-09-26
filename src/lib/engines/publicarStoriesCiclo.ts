@@ -13,7 +13,7 @@ function formatarDataHoraSaoPaulo(iso: string): string {
   }).format(new Date(iso));
 }
 
-// Motor de publicação do CicloStory. Extraído de
+// Motor de publicação do Story Engine. Extraído de
 // /api/cron/publicar-stories-ciclo pra poder ser chamado tanto pela rota
 // individual (debug manual) quanto pelo cron combinado
 // /api/cron/publicar-tudo. Mesmo padrão de "reivindica antes de publicar"
@@ -54,9 +54,9 @@ export async function executarPublicarStoriesCiclo(admin: ReturnType<typeof crea
     if (!esgotou) return;
 
     await enviarEmail({
-      assunto: `Erro ao publicar Story do CicloStory — ${conta.name}`,
+      assunto: `Erro ao publicar Story do Story Engine — ${conta.name}`,
       corpo:
-        `A conta "${conta.name}" teve um erro ao tentar publicar um Story do CicloStory agendado ` +
+        `A conta "${conta.name}" teve um erro ao tentar publicar um Story do Story Engine agendado ` +
         `pra ${formatarDataHoraSaoPaulo(item.scheduled_at)}, depois de ${tentativas} tentativas.\n\n` +
         `Erro: ${msg}\n\n` +
         `Publica esse Story manualmente.`,

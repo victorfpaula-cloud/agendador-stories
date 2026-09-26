@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-// Lista/cria categorias do CicloStory de uma conta. Cada categoria já é o
+// Lista/cria categorias do Story Engine de uma conta. Cada categoria já é o
 // "slot" completo: nome + dias da semana ativos — os horários e as imagens
 // vivem em tabelas próprias, geridas pelas rotas de baixo
 // (ciclo-categorias/[id]/horarios e /itens).

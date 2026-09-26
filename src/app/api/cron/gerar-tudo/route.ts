@@ -4,7 +4,7 @@ import { executarLeituraStoryDrive } from "@/lib/storyDriveIngestao";
 import { executarGeracaoStoriesCiclo } from "@/lib/storyCicloGeracao";
 
 // Chamada única que roda os 2 motores de "gerar conteúdo novo" (AutoStory
-// lendo o Drive + CicloStory sorteando a próxima imagem da categoria)
+// lendo o Drive + Story Engine sorteando a próxima imagem da categoria)
 // dentro da MESMA execução da função — substitui 2 crons separados de 30
 // em 30 min por 1 só, mesmo motivo do /api/cron/publicar-tudo (cortar o
 // "Fluid Active CPU" gasto com inicialização repetida). Continuam 100%
@@ -49,7 +49,7 @@ async function executar(req: NextRequest) {
       }
       return { resultados };
     }),
-    comSeguranca("CicloStory", () => executarGeracaoStoriesCiclo(admin)),
+    comSeguranca("Story Engine", () => executarGeracaoStoriesCiclo(admin)),
   ]);
 
   return NextResponse.json({ storiesDrive, storiesCiclo });

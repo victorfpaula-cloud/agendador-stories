@@ -5,7 +5,7 @@ import type { Account, StoryCicloCategoria } from "@/types/database";
 import ContaTabs from "../ContaTabs";
 import CicloClient, { type CategoriaComHorarios, type Contagem } from "./CicloClient";
 
-// CicloStory: banco de imagens/vídeos por categoria, que gira sem repetir.
+// Story Engine: banco de imagens/vídeos por categoria, que gira sem repetir.
 // Módulo isolado de AutoFeed/AutoStory — tabelas, rotas e crons próprios,
 // sem nenhum ponto de contato por baixo dos panos (ver src/lib para os dois
 // robôs: /api/cron/gerar-stories-ciclo e /api/cron/publicar-stories-ciclo).

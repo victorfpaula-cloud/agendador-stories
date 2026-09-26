@@ -7,6 +7,18 @@ import { prepararImagem } from "@/lib/imagemCliente";
 import { enviarMidiaDireto } from "@/lib/uploadDireto";
 import { gerarThumbnail } from "@/lib/thumbnail";
 import type { ScheduleSlot } from "@/types/database";
+import { IconeStoryEngine } from "./ContaTabs";
+
+// Um horário configurado no Story Engine (categoria ativa + horário
+// ativo) — só pra mostrar o "containerzinho fantasma" na tela de Stories
+// normal (pedido do Victor em 26/09/2026), sem imagem própria (a mídia só
+// é escolhida na hora que o robô roda, ver /contas/[id]/stories-ciclo).
+export type StoryEngineSlot = {
+  id: string;
+  horario: string; // "HH:MM:SS"
+  categoriaNome: string;
+  diasSemana: number[]; // 1 = segunda ... 7 = domingo
+};
 
 const BUCKET_STORIES = "story-media";
 
@@ -48,11 +60,15 @@ export default function WeekEditor({
   initialSlots,
   diaHoje,
   logsHoje,
+  storyEngineSlots,
+  storyEngineStatusHoje,
 }: {
   accountId: string;
   initialSlots: ScheduleSlot[];
   diaHoje: number;
   logsHoje: Record<string, "success" | "error">;
+  storyEngineSlots: StoryEngineSlot[];
+  storyEngineStatusHoje: Record<string, "success" | "error">;
 }) {
   const router = useRouter();
   const [slots, setSlots] = useState<ScheduleSlot[]>(initialSlots);
@@ -109,6 +125,20 @@ export default function WeekEditor({
             .filter((s) => s.day_of_week === dia.value)
             .sort((a, b) => a.time_of_day.localeCompare(b.time_of_day));
 
+          const fantasmasDoDia = storyEngineSlots.filter((s) => s.diasSemana.includes(dia.value));
+
+          // Mistura os horários reais com os "fantasma" do Story Engine, na
+          // mesma ordem por horário — pedido do Victor: um containerzinho a
+          // mais junto dos que já existem, não uma lista separada.
+          const itensDoDia: ({ tipo: "real"; slot: ScheduleSlot } | { tipo: "fantasma"; item: StoryEngineSlot })[] = [
+            ...doDia.map((slot) => ({ tipo: "real" as const, slot })),
+            ...fantasmasDoDia.map((item) => ({ tipo: "fantasma" as const, item })),
+          ].sort((a, b) => {
+            const horaA = a.tipo === "real" ? a.slot.time_of_day : a.item.horario;
+            const horaB = b.tipo === "real" ? b.slot.time_of_day : b.item.horario;
+            return horaA.localeCompare(horaB);
+          });
+
           const totalLinhas = Math.max(LINHAS_MINIMAS, doDia.length) + (linhasExtras[dia.value] ?? 0);
           const linhasVaziasQtd = Math.max(0, totalLinhas - doDia.length);
           const ehHoje = dia.value === diaHoje;
@@ -125,15 +155,23 @@ export default function WeekEditor({
               </h2>
 
               <div className="space-y-2">
-                {doDia.map((slot) => (
-                  <LinhaSalva
-                    key={slot.id}
-                    slot={slot}
-                    onAtualizar={aoAtualizar}
-                    onRemover={aoRemover}
-                    status={ehHoje ? logsHoje[slot.id] ?? "pendente" : undefined}
-                  />
-                ))}
+                {itensDoDia.map((item) =>
+                  item.tipo === "real" ? (
+                    <LinhaSalva
+                      key={item.slot.id}
+                      slot={item.slot}
+                      onAtualizar={aoAtualizar}
+                      onRemover={aoRemover}
+                      status={ehHoje ? logsHoje[item.slot.id] ?? "pendente" : undefined}
+                    />
+                  ) : (
+                    <LinhaFantasmaStoryEngine
+                      key={item.item.id}
+                      item={item.item}
+                      status={ehHoje ? storyEngineStatusHoje[item.item.id] ?? "pendente" : undefined}
+                    />
+                  )
+                )}
 
                 {Array.from({ length: linhasVaziasQtd }).map((_, i) => (
                   <LinhaNova
@@ -259,6 +297,28 @@ function LinhaSalva({
         </button>
       </div>
       {erro && <p className="mt-1 text-xs text-red-600">{erro}</p>}
+    </div>
+  );
+}
+
+// Containerzinho fantasma do Story Engine — só um aviso visual do que vai
+// ser postado naquele dia, sem mídia (a imagem só é escolhida na hora que
+// o robô roda) e sem botão de editar/remover (isso é feito na aba do Story
+// Engine). Igual aos horários normais, a bolinha de status só aparece no
+// dia de hoje.
+function LinhaFantasmaStoryEngine({ item, status }: { item: StoryEngineSlot; status?: StatusHoje }) {
+  return (
+    <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50/60 p-2.5">
+      <div className="flex items-center gap-2">
+        {status && <BolinhaStatus status={status} />}
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-indigo-50 text-indigo-500">
+          <IconeStoryEngine className="h-5 w-5" />
+        </span>
+        <p className="min-w-0 flex-1 truncate text-sm text-slate-500">
+          <span className="font-medium text-slate-600">Story Engine</span> · {item.categoriaNome}
+        </p>
+        <span className="shrink-0 text-xs text-slate-400">{item.horario.slice(0, 5)}</span>
+      </div>
     </div>
   );
 }

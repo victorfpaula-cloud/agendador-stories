@@ -6,7 +6,7 @@ import { executarPublicarStoriesDrive } from "@/lib/engines/publicarStoriesDrive
 import { executarPublicarStoriesCiclo } from "@/lib/engines/publicarStoriesCiclo";
 
 // Chamada única que roda os 4 motores de publicação (Stories semanal,
-// AutoFeed, AutoStory, CicloStory) dentro da MESMA execução da função —
+// AutoFeed, AutoStory, Story Engine) dentro da MESMA execução da função —
 // substitui 5 crons separados de 5 em 5 min (cada um acordando sua própria
 // função na Vercel) por 1 só, cortando bastante o "Fluid Active CPU" gasto
 // com inicialização repetida (achado por Victor em 25/09/2026, olhando o
@@ -54,7 +54,7 @@ async function executar(req: NextRequest) {
     comSeguranca("Stories semanal", () => executarPublicarStoriesSemanal(admin)),
     comSeguranca("AutoFeed", () => executarPublicarFeed(admin)),
     comSeguranca("AutoStory", () => executarPublicarStoriesDrive(admin)),
-    comSeguranca("CicloStory", () => executarPublicarStoriesCiclo(admin)),
+    comSeguranca("Story Engine", () => executarPublicarStoriesCiclo(admin)),
   ]);
 
   return NextResponse.json({ storiesSemanal, feed, storiesDrive, storiesCiclo });

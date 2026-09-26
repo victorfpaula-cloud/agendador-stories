@@ -1,7 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { agoraEmSaoPaulo } from "@/lib/days";
 
-// Geração de Stories do CicloStory (banco de imagens por categoria, gira
+// Geração de Stories do Story Engine (banco de imagens por categoria, gira
 // sem repetir) — pra cada horário ativo cujo dia da semana de hoje bate com
 // os dias marcados na categoria, chama a função gerar_story_ciclo do banco
 // (ver supabase/story-ciclo.sql). Diferente do AutoStory, aqui não baixa
