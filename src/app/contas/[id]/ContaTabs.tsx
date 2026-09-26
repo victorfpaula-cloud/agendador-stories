@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { GlassSurface } from "@/components/Glass";
 
 // Navegação em botões dentro de uma conta — Stories (rotina semanal, URL
 // permanece a mesma de sempre: /contas/[id]), Agendamento de Publicações
@@ -39,21 +38,17 @@ export default function ContaTabs({ accountId }: { accountId: string }) {
     // cortar borda.
     <div className="mb-6 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
       {abas.map((aba) => (
-        // "contents" tira o <Link> do fluxo de layout (o grid/flex passa a
-        // enxergar o GlassSurface direto como item), mas o clique continua
-        // funcionando: ele borbulha do conteúdo até o <a> normalmente.
-        <Link key={aba.href} href={aba.href} className="contents">
-          <GlassSurface
-            tint={aba.ativo ? "linear-gradient(180deg, rgba(129,140,248,.48), rgba(61,84,224,.74))" : "rgba(255,255,255,.4)"}
-            sheenOpacity={aba.ativo ? 0.85 : 0.3}
-            blur={8}
-            scale={-18}
-            className="flex items-center justify-center gap-1.5 whitespace-nowrap px-3.5 py-2 text-sm font-medium transition"
-            style={{ color: aba.ativo ? "#fff" : "#475569" }}
-          >
-            <aba.Icone className="h-4 w-4 shrink-0" />
-            {aba.label}
-          </GlassSurface>
+        <Link
+          key={aba.href}
+          href={aba.href}
+          className={`flex items-center justify-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-2 text-sm font-medium transition ${
+            aba.ativo
+              ? "bg-brand-600 text-white shadow-sm"
+              : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+          }`}
+        >
+          <aba.Icone className="h-4 w-4 shrink-0" />
+          {aba.label}
         </Link>
       ))}
     </div>

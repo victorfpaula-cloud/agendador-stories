@@ -8,7 +8,6 @@ import { enviarMidiaDireto } from "@/lib/uploadDireto";
 import { gerarThumbnail } from "@/lib/thumbnail";
 import type { ScheduleSlot } from "@/types/database";
 import { IconeStoryEngine } from "./ContaTabs";
-import { GlassButton } from "@/components/Glass";
 
 // Um horário configurado no Story Engine (categoria ativa + horário
 // ativo) — só pra mostrar o "containerzinho fantasma" na tela de Stories
@@ -389,9 +388,14 @@ function LinhaNova({
           />
         </label>
 
-        <GlassButton type="button" onClick={salvar} disabled={carregando} className="h-7 px-3 text-xs font-semibold">
+        <button
+          type="button"
+          onClick={salvar}
+          disabled={carregando}
+          className="rounded-md bg-brand-500 px-2.5 py-1 text-xs font-medium text-white hover:bg-brand-600 disabled:opacity-60"
+        >
           {carregando ? "Salvando…" : "Salvar"}
-        </GlassButton>
+        </button>
       </div>
       {erro && <p className="mt-1 text-xs text-red-600">{erro}</p>}
     </div>

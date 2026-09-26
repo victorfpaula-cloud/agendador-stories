@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { DriveConfig, DriveExecucao, DriveExecucaoResultado } from "@/types/database";
-import { GlassButton } from "@/components/Glass";
 
 // Mensagem amigável por resultado — pra Victor entender o que aconteceu na
 // última vez que o robô rodou sem precisar interpretar nada técnico.
@@ -161,9 +160,14 @@ export default function DriveConfigClient({
           </span>
         </label>
 
-        <GlassButton type="button" onClick={salvar} disabled={salvando} className="h-11 w-full text-sm font-semibold">
+        <button
+          type="button"
+          onClick={salvar}
+          disabled={salvando}
+          className="w-full rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
+        >
           {salvando ? "Salvando…" : "Salvar configuração"}
-        </GlassButton>
+        </button>
 
         {erro && <p className="text-xs text-red-600">{erro}</p>}
         {salvoEm && !erro && <p className="text-xs text-green-600">Configuração salva ({salvoEm}).</p>}

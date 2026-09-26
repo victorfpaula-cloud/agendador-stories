@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { nomeDia } from "@/lib/days";
 import type { Account } from "@/types/database";
-import { GlassSurface } from "@/components/Glass";
 
 export type ResumoDoDia = { total: number; postados: number; erros: number };
 
@@ -212,13 +211,10 @@ function ContaCard({
   }
 
   return (
-    <GlassSurface
-      radius={20}
-      tint="rgba(255,255,255,.5)"
-      sheenOpacity={0.3}
-      blur={7}
-      scale={-12}
-      className={`p-5 shadow-sm ring-1 ring-slate-200/70 transition ${conta.is_active ? "" : "opacity-60"}`}
+    <div
+      className={`rounded-xl2 bg-white p-5 shadow-sm ring-1 ring-slate-200 transition ${
+        conta.is_active ? "" : "opacity-60"
+      }`}
     >
       <Link href={`/contas/${conta.id}`} className="group block">
         <div className="mb-3 flex items-center justify-between">
@@ -290,7 +286,7 @@ function ContaCard({
         </button>
       </div>
       {erro && <p className="mt-2 text-xs text-red-600">{erro}</p>}
-    </GlassSurface>
+    </div>
   );
 }
 

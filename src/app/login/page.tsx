@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import { GlassButton } from "@/components/Glass";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -60,9 +59,13 @@ export default function LoginPage() {
 
         {erro && <p className="mb-4 text-sm text-red-600">{erro}</p>}
 
-        <GlassButton type="submit" disabled={carregando} className="h-11 w-full text-sm font-semibold">
+        <button
+          type="submit"
+          disabled={carregando}
+          className="w-full rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-brand-600 disabled:opacity-60"
+        >
           {carregando ? "Entrando..." : "Entrar"}
-        </GlassButton>
+        </button>
 
         <p className="mt-4 text-xs text-slate-400">
           O usuário admin é criado direto no painel do Supabase (Authentication → Users → Add user).
