@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { nomeDia } from "@/lib/days";
 import type { Account } from "@/types/database";
+import { IconeStoryEngine } from "./[id]/ContaTabs";
 
 export type ResumoDoDia = { total: number; postados: number; erros: number };
 
@@ -45,22 +46,26 @@ async function chamarApi(input: string, init?: RequestInit) {
 }
 
 export type ResumoAutoStory = { agendados: number; postados: number };
+export type ResumoStoryEngine = { agendados: number; postados: number };
 
 export default function ListaContas({
   initialContas,
   diaHoje,
   resumoHoje,
   storiesAutomaticosHoje,
+  storyEngineHoje,
 }: {
   initialContas: Account[];
   diaHoje: number;
   resumoHoje: Record<string, ResumoDoDia>;
   storiesAutomaticosHoje: Record<string, ResumoAutoStory>;
+  storyEngineHoje: Record<string, ResumoStoryEngine>;
 }) {
   const [contas, setContas] = useState<Account[]>(initialContas);
   const [diaAtual, setDiaAtual] = useState(diaHoje);
   const [resumoAtual, setResumoAtual] = useState<Record<string, ResumoDoDia>>(resumoHoje);
   const [storiesDriveAtual, setStoriesDriveAtual] = useState<Record<string, ResumoAutoStory>>(storiesAutomaticosHoje);
+  const [storyEngineAtual, setStoryEngineAtual] = useState<Record<string, ResumoStoryEngine>>(storyEngineHoje);
   const [avatares, setAvatares] = useState<Record<string, string | null>>({});
 
   function aoAtualizar(conta: Account) {
@@ -85,6 +90,7 @@ export default function ListaContas({
         if (cancelado) return;
         setResumoAtual(json.resumo);
         setStoriesDriveAtual(json.storiesAutomaticosHoje);
+        setStoryEngineAtual(json.storyEngineHoje);
         setDiaAtual(json.diaHoje);
       } catch {
         // Falha silenciosa: é só um recheck em segundo plano, tenta de
@@ -133,6 +139,7 @@ export default function ListaContas({
           avatarUrl={avatares[conta.id] ?? null}
           resumo={resumoAtual[conta.id] ?? { total: 0, postados: 0, erros: 0 }}
           storiesAutomaticosHoje={storiesDriveAtual[conta.id]}
+          storyEngineHoje={storyEngineAtual[conta.id]}
           diaHoje={diaAtual}
           onAtualizar={aoAtualizar}
           onRemover={aoRemover}
@@ -155,6 +162,7 @@ function ContaCard({
   avatarUrl,
   resumo,
   storiesAutomaticosHoje,
+  storyEngineHoje,
   diaHoje,
   onAtualizar,
   onRemover,
@@ -166,6 +174,10 @@ function ContaCard({
   // robô); objeto = quantos Stories estão agendados hoje por essa
   // automação e quantos já saíram.
   storiesAutomaticosHoje: ResumoAutoStory | undefined;
+  // undefined = conta sem nenhuma categoria do Story Engine agendada pra
+  // hoje (não mostra o card); objeto = quantos horários estão agendados
+  // hoje e quantos já foram publicados.
+  storyEngineHoje: ResumoStoryEngine | undefined;
   diaHoje: number;
   onAtualizar: (conta: Account) => void;
   onRemover: (id: string) => void;
@@ -252,16 +264,32 @@ function ContaCard({
         </p>
       </Link>
 
-      {storiesAutomaticosHoje !== undefined && (
-        <div
-          className="mt-2 flex w-fit items-center gap-1.5 rounded-full bg-indigo-50 px-2 py-1 text-[11px] font-medium text-indigo-700"
-          title="Stories automáticos publicados hoje / agendados pra hoje"
-        >
-          <span aria-hidden="true">🤖</span>
-          <span>AutoStory</span>
-          <span className="rounded-full bg-indigo-600 px-1.5 py-0.5 text-[10px] leading-none text-white">
-            {storiesAutomaticosHoje.postados}/{storiesAutomaticosHoje.agendados}
-          </span>
+      {(storiesAutomaticosHoje !== undefined || storyEngineHoje !== undefined) && (
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          {storiesAutomaticosHoje !== undefined && (
+            <div
+              className="flex w-fit items-center gap-1.5 rounded-full bg-indigo-50 px-2 py-1 text-[11px] font-medium text-indigo-700"
+              title="Stories automáticos publicados hoje / agendados pra hoje"
+            >
+              <span aria-hidden="true">🤖</span>
+              <span>AutoStory</span>
+              <span className="rounded-full bg-indigo-600 px-1.5 py-0.5 text-[10px] leading-none text-white">
+                {storiesAutomaticosHoje.postados}/{storiesAutomaticosHoje.agendados}
+              </span>
+            </div>
+          )}
+          {storyEngineHoje !== undefined && (
+            <div
+              className="flex w-fit items-center gap-1.5 rounded-full bg-violet-50 px-2 py-1 text-[11px] font-medium text-violet-700"
+              title="Story Engine publicados hoje / agendados pra hoje"
+            >
+              <IconeStoryEngine className="h-3 w-3 shrink-0" />
+              <span>Story Engine</span>
+              <span className="rounded-full bg-violet-600 px-1.5 py-0.5 text-[10px] leading-none text-white">
+                {storyEngineHoje.postados}/{storyEngineHoje.agendados}
+              </span>
+            </div>
+          )}
         </div>
       )}
 

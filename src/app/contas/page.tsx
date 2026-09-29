@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { agoraEmSaoPaulo } from "@/lib/days";
+import { buscarStoryEngineHoje } from "@/lib/storyCicloResumo";
 import type { Account } from "@/types/database";
 import LogoutButton from "./LogoutButton";
 import ListaContas, { type ResumoDoDia } from "./ListaContas";
@@ -65,6 +66,8 @@ export default async function ContasPage({
     if (s.status === "success") storiesAutomaticosHoje[s.account_id].postados += 1;
   }
 
+  const storyEngineHoje = await buscarStoryEngineHoje(admin, diaSemanaIso, dataISO);
+
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
       <div className="mb-8 flex items-center justify-between">
@@ -88,6 +91,7 @@ export default async function ContasPage({
         diaHoje={diaSemanaIso}
         resumoHoje={resumoHoje}
         storiesAutomaticosHoje={storiesAutomaticosHoje}
+        storyEngineHoje={storyEngineHoje}
       />
 
       {lista.length > 0 && (
