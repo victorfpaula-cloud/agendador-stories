@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { agoraEmSaoPaulo } from "@/lib/days";
+import { buscarStoryEngineHoje } from "@/lib/storyCicloResumo";
 
 export const dynamic = "force-dynamic";
 
@@ -57,5 +58,7 @@ export async function GET() {
     if (s.status === "success") storiesAutomaticosHoje[s.account_id].postados += 1;
   }
 
-  return NextResponse.json({ diaHoje: diaSemanaIso, resumo, storiesAutomaticosHoje });
+  const storyEngineHoje = await buscarStoryEngineHoje(admin, diaSemanaIso, dataISO);
+
+  return NextResponse.json({ diaHoje: diaSemanaIso, resumo, storiesAutomaticosHoje, storyEngineHoje });
 }
