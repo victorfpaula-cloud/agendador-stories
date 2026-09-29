@@ -185,6 +185,7 @@ function ContaCard({
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [fotoFalhou, setFotoFalhou] = useState(false);
+  const [aviso, setAviso] = useState<string | null>(null);
 
   async function alternarPausa() {
     setCarregando(true);
@@ -198,6 +199,20 @@ function ContaCard({
       onAtualizar(json.conta);
     } catch (err) {
       setErro(err instanceof Error ? err.message : "Erro ao atualizar a conta.");
+    } finally {
+      setCarregando(false);
+    }
+  }
+
+  async function reconectar() {
+    setCarregando(true);
+    setErro(null);
+    setAviso(null);
+    try {
+      await chamarApi(`/api/accounts/${conta.id}/reconectar`, { method: "POST" });
+      setAviso("Conexão renovada.");
+    } catch (err) {
+      setErro(err instanceof Error ? err.message : "Erro ao reconectar a conta.");
     } finally {
       setCarregando(false);
     }
@@ -306,6 +321,15 @@ function ContaCard({
         </button>
         <button
           type="button"
+          onClick={reconectar}
+          disabled={carregando}
+          title="Renova o token de acesso desta conta (usa o token configurado no servidor)"
+          className="text-xs font-medium text-slate-500 hover:text-brand-600 disabled:opacity-60"
+        >
+          Reconectar
+        </button>
+        <button
+          type="button"
           onClick={excluir}
           disabled={carregando}
           className="text-xs font-medium text-red-500 hover:text-red-700 disabled:opacity-60"
@@ -313,6 +337,7 @@ function ContaCard({
           {carregando ? "…" : "Excluir"}
         </button>
       </div>
+      {aviso && <p className="mt-2 text-xs text-green-600">{aviso}</p>}
       {erro && <p className="mt-2 text-xs text-red-600">{erro}</p>}
     </div>
   );
