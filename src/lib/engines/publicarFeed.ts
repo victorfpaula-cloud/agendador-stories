@@ -1,5 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import { publicarPostFeed, publicarPostCarrossel, MetaApiError } from "@/lib/meta";
+import { publicarPostFeed, publicarPostCarrossel, publicarCrossPostNaPagina, MetaApiError } from "@/lib/meta";
 import { enviarEmail } from "@/lib/email";
 import type { Account, FeedPostAccount, FeedPostMedia } from "@/types/database";
 
@@ -155,6 +155,32 @@ export async function executarPublicarFeed(admin: ReturnType<typeof createAdminC
           .eq("id", contaAlvo.id);
 
         algumSucesso = true;
+
+        // Cross-post pro Facebook: best-effort, só depois que o Instagram já
+        // saiu de verdade. Uma falha aqui nunca mexe no status acima (que já
+        // está salvo) nem entra no e-mail de erro — só fica registrada pra
+        // dar pra investigar depois, ver supabase/cross-post-facebook.sql.
+        if (conta.cross_post_facebook) {
+          try {
+            await publicarCrossPostNaPagina({
+              pageId: conta.page_id,
+              pageAccessToken: conta.page_access_token,
+              mediaType: post.media_type,
+              itens: midiasComUrl.map((m) => ({ mediaUrl: m.media_url, mediaType: m.media_type })),
+              caption: post.caption,
+            });
+            await admin
+              .from("feed_post_accounts")
+              .update({ fb_cross_post_status: "success", fb_cross_post_error: null })
+              .eq("id", contaAlvo.id);
+          } catch (err) {
+            const msg = err instanceof MetaApiError || err instanceof Error ? err.message : "Erro desconhecido";
+            await admin
+              .from("feed_post_accounts")
+              .update({ fb_cross_post_status: "error", fb_cross_post_error: msg })
+              .eq("id", contaAlvo.id);
+          }
+        }
       } catch (err) {
         const msg = err instanceof MetaApiError || err instanceof Error ? err.message : "Erro desconhecido";
         await falharTentativaConta(contaAlvo, conta, msg);

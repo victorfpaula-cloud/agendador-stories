@@ -2,21 +2,29 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { removerMidia } from "@/lib/storage";
 
-// Pausa ou retoma uma conta. Uma conta pausada (is_active = false) é
-// ignorada pelo cron — a query de /api/cron/run já filtra
-// accounts.is_active, então não precisa mexer em mais nada.
+// Pausa/retoma uma conta (is_active = false é ignorada pelo cron — a query
+// de /api/cron/run já filtra accounts.is_active) e/ou liga/desliga o
+// cross-post automático pro Facebook (ver supabase/cross-post-facebook.sql).
+// Os dois campos são opcionais e independentes — manda só o que quer mudar.
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   const admin = createAdminClient();
   const { id } = params;
 
   const body = await req.json().catch(() => ({}));
-  if (typeof body.is_active !== "boolean") {
-    return NextResponse.json({ erro: "Campo is_active é obrigatório." }, { status: 400 });
+  const patch: { is_active?: boolean; cross_post_facebook?: boolean } = {};
+  if (typeof body.is_active === "boolean") patch.is_active = body.is_active;
+  if (typeof body.cross_post_facebook === "boolean") patch.cross_post_facebook = body.cross_post_facebook;
+
+  if (Object.keys(patch).length === 0) {
+    return NextResponse.json(
+      { erro: "Nenhum campo válido pra atualizar (is_active ou cross_post_facebook)." },
+      { status: 400 }
+    );
   }
 
   const { data: conta, error } = await admin
     .from("accounts")
-    .update({ is_active: body.is_active })
+    .update(patch)
     .eq("id", id)
     .select("*")
     .maybeSingle();

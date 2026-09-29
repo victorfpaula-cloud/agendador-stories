@@ -53,6 +53,7 @@ export default async function PublicacoesDaContaPage({ params }: { params: { id:
         accounts={contas ?? []}
         defaultAccountId={(conta as Account).id}
         initialPosts={(posts ?? []) as FeedPostComDetalhes[]}
+        crossPostFacebookInicial={(conta as Account).cross_post_facebook}
       />
     </main>
   );
