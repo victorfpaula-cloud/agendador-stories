@@ -81,10 +81,15 @@ export default function PublicacoesClient({
   accounts,
   defaultAccountId,
   initialPosts,
+  crossPostFacebookInicial,
 }: {
   accounts: Conta[];
   defaultAccountId?: string;
   initialPosts: FeedPostComDetalhes[];
+  // undefined só se a página não souber a conta atual (não deveria
+  // acontecer na prática — essa tela sempre é aberta de dentro de uma
+  // conta). Ver ContaTabs/page.tsx.
+  crossPostFacebookInicial?: boolean;
 }) {
   const [posts, setPosts] = useState<FeedPostComDetalhes[]>(initialPosts);
 
@@ -108,6 +113,10 @@ export default function PublicacoesClient({
 
   return (
     <div className="space-y-8">
+      {defaultAccountId && crossPostFacebookInicial !== undefined && (
+        <CrossPostFacebook accountId={defaultAccountId} valorInicial={crossPostFacebookInicial} />
+      )}
+
       <ComporPost accounts={accounts} defaultAccountId={defaultAccountId} onCriado={aoCriar} />
 
       <div>
@@ -129,6 +138,60 @@ export default function PublicacoesClient({
             ))}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// Chavinha de ligar/desligar o cross-post automático pro Facebook (mesmo
+// padrão visual de switch usado no Story Engine) — toda publicação de
+// Feed/Reels/carrossel dessa conta passa a também tentar sair no Feed da
+// Página do Facebook vinculada. Best-effort: uma falha aqui nunca afeta a
+// publicação no Instagram (ver publicarFeed.ts).
+function CrossPostFacebook({ accountId, valorInicial }: { accountId: string; valorInicial: boolean }) {
+  const [ativo, setAtivo] = useState(valorInicial);
+  const [alternando, setAlternando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  async function alternar() {
+    const novoValor = !ativo;
+    setAlternando(true);
+    setErro(null);
+    try {
+      await chamarApi(`/api/accounts/${accountId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cross_post_facebook: novoValor }),
+      });
+      setAtivo(novoValor);
+    } catch (err) {
+      setErro(err instanceof Error ? err.message : "Erro ao atualizar.");
+    } finally {
+      setAlternando(false);
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-3 rounded-xl2 bg-white p-4 shadow-sm ring-1 ring-slate-200">
+      <button
+        type="button"
+        onClick={alternar}
+        disabled={alternando}
+        title={ativo ? "Ligado — clique pra desligar" : "Desligado — clique pra ligar"}
+        className={`relative h-5 w-9 shrink-0 rounded-full transition disabled:opacity-60 ${ativo ? "bg-brand-600" : "bg-slate-300"}`}
+      >
+        <span
+          className="absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all"
+          style={{ left: ativo ? "18px" : "2px" }}
+        />
+      </button>
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-slate-900">Cross-post pro Facebook</p>
+        <p className="text-xs text-slate-500">
+          Publicar automaticamente também no Feed da Página do Facebook vinculada (foto, Reels e carrossel só de
+          fotos). Stories não é coberto.
+        </p>
+        {erro && <p className="mt-1 text-xs text-red-600">{erro}</p>}
       </div>
     </div>
   );

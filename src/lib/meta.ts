@@ -329,4 +329,82 @@ export async function publicarPostCarrossel({
   return publicarContainer(igUserId, containerId, pageAccessToken);
 }
 
+// ---------- Cross-post pro Feed da Página do Facebook ----------
+// Best-effort, sempre chamado DEPOIS de já ter publicado no Instagram com
+// sucesso — usa o mesmo page_id/page_access_token que a conta já guarda
+// desde a conexão inicial, sem precisar de nenhuma permissão nova. Stories
+// não tem suporte aqui (a API de Stories de Página não é confiável pra
+// publicação de terceiros); carrossel só funciona se todos os itens forem
+// foto (álbum de várias fotos) — com vídeo no meio, lança MetaApiError e
+// quem chamou trata isso como falha do cross-post, sem afetar o post do
+// Instagram que já saiu.
+
+async function publicarFotoNaPagina(pageId: string, pageAccessToken: string, mediaUrl: string, caption?: string) {
+  const params: Record<string, string> = { url: mediaUrl, access_token: pageAccessToken };
+  if (caption) params.caption = caption;
+  const json = await graphFetch(`/${pageId}/photos`, params, "POST");
+  return (json.post_id as string | undefined) ?? (json.id as string);
+}
+
+async function publicarVideoNaPagina(pageId: string, pageAccessToken: string, mediaUrl: string, caption?: string) {
+  const params: Record<string, string> = { file_url: mediaUrl, access_token: pageAccessToken };
+  if (caption) params.description = caption;
+  const json = await graphFetch(`/${pageId}/videos`, params, "POST");
+  return json.id as string;
+}
+
+async function publicarAlbumNaPagina(
+  pageId: string,
+  pageAccessToken: string,
+  itens: { mediaUrl: string; mediaType: "IMAGE" | "VIDEO" }[],
+  caption?: string
+) {
+  if (itens.some((i) => i.mediaType === "VIDEO")) {
+    throw new MetaApiError("Cross-post de carrossel com vídeo misturado com foto não é suportado.");
+  }
+
+  const fbids: string[] = [];
+  for (const item of itens) {
+    const json = await graphFetch(
+      `/${pageId}/photos`,
+      { url: item.mediaUrl, published: "false", access_token: pageAccessToken },
+      "POST"
+    );
+    fbids.push(json.id as string);
+  }
+
+  const params: Record<string, string> = {
+    attached_media: JSON.stringify(fbids.map((id) => ({ media_fbid: id }))),
+    access_token: pageAccessToken,
+  };
+  if (caption) params.message = caption;
+
+  const json = await graphFetch(`/${pageId}/feed`, params, "POST");
+  return json.id as string;
+}
+
+interface CrossPostNaPaginaParams {
+  pageId: string;
+  pageAccessToken: string;
+  mediaType: "IMAGE" | "VIDEO" | "REELS" | "CAROUSEL";
+  itens: { mediaUrl: string; mediaType: "IMAGE" | "VIDEO" }[];
+  caption?: string;
+}
+
+export async function publicarCrossPostNaPagina({
+  pageId,
+  pageAccessToken,
+  mediaType,
+  itens,
+  caption,
+}: CrossPostNaPaginaParams): Promise<string> {
+  if (mediaType === "CAROUSEL") {
+    return publicarAlbumNaPagina(pageId, pageAccessToken, itens, caption);
+  }
+  if (mediaType === "VIDEO" || mediaType === "REELS") {
+    return publicarVideoNaPagina(pageId, pageAccessToken, itens[0].mediaUrl, caption);
+  }
+  return publicarFotoNaPagina(pageId, pageAccessToken, itens[0].mediaUrl, caption);
+}
+
 export { MetaApiError };

@@ -13,7 +13,10 @@ create table if not exists public.accounts (
   page_access_token text not null,
   token_obtained_at timestamptz not null default now(),
   is_active boolean not null default true,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  -- Cross-post automático pro Feed da Página do Facebook — ver
+  -- supabase/cross-post-facebook.sql pro contexto completo.
+  cross_post_facebook boolean not null default false
 );
 
 -- Horários recorrentes semanais de cada conta

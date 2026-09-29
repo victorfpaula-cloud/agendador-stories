@@ -14,6 +14,9 @@ export interface Account {
   avatar_url: string | null;
   avatar_atualizado_em: string | null;
   created_at: string;
+  // Cross-post automático pro Feed da Página do Facebook — ver
+  // supabase/cross-post-facebook.sql.
+  cross_post_facebook: boolean;
 }
 
 export interface ScheduleSlot {
@@ -123,6 +126,11 @@ export interface FeedPostAccount {
   // /api/cron/publicar-feed).
   tentativas: number;
   created_at: string;
+  // Cross-post pro Feed da Página do Facebook (só tentado quando
+  // accounts.cross_post_facebook está ligado) — best-effort, nunca afeta o
+  // status/tentativas do Instagram acima. Ver supabase/cross-post-facebook.sql.
+  fb_cross_post_status: "not_attempted" | "success" | "error";
+  fb_cross_post_error: string | null;
 }
 
 // Formato "com detalhes" usado na tela: o post já vem com a(s) mídia(s) e a(s)
