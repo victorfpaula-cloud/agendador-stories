@@ -9,7 +9,18 @@
 // motivo pra travar ou confundir o status de uma publicação real.
 const RESEND_API_URL = "https://api.resend.com/emails";
 
-export async function enviarEmail({ assunto, corpo, html }: { assunto: string; corpo: string; html?: string }) {
+export async function enviarEmail({
+  assunto,
+  corpo,
+  html,
+  anexos,
+}: {
+  assunto: string;
+  corpo: string;
+  html?: string;
+  // conteudo em base64 (ver relatório mensal, um PDF por conta)
+  anexos?: { nome: string; conteudo: string }[];
+}) {
   const apiKey = process.env.RESEND_API_KEY;
   const destinatario = process.env.ALERT_EMAIL;
 
@@ -31,6 +42,7 @@ export async function enviarEmail({ assunto, corpo, html }: { assunto: string; c
         subject: assunto,
         text: corpo,
         ...(html ? { html } : {}),
+        ...(anexos && anexos.length > 0 ? { attachments: anexos.map((a) => ({ filename: a.nome, content: a.conteudo })) } : {}),
       }),
       cache: "no-store",
     });
