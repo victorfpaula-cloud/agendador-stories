@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { nomeDia } from "@/lib/days";
-import type { Account } from "@/types/database";
+import type { ContaPublica as Account } from "@/types/database";
 import { IconeStoryEngine } from "./[id]/ContaTabs";
 
 export type ResumoDoDia = { total: number; postados: number; erros: number };

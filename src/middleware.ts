@@ -1,12 +1,28 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 
-const ROTAS_PUBLICAS = ["/", "/login", "/api/cron/run"];
+// Achado em 30/09/2026: antes, a lista abaixo era conferida com startsWith, e
+// como toda rota começa com "/", o app inteiro ficava público (inclusive
+// excluir conta e as rotas que usam a chave de administrador do banco).
+// Agora "/" e "/login" valem só exatos. Tudo em /api/cron/ continua sem
+// sessão porque quem chama é o pg_cron — e cada uma dessas rotas confere o
+// x-cron-secret sozinha.
+const PAGINAS_PUBLICAS = new Set(["/", "/login"]);
+const PREFIXOS_PUBLICOS = ["/api/cron/"];
+
+// O projeto do Supabase é compartilhado com outros apps (existe, por
+// exemplo, um usuário revisor do ShoppingHub), então estar logado não basta
+// — só entra quem está nessa lista. ADMIN_EMAILS (separado por vírgula) na
+// Vercel troca a lista; sem ela vale o padrão abaixo.
+function emailsPermitidos(): string[] {
+  const lista = process.env.ADMIN_EMAILS ? process.env.ADMIN_EMAILS.split(",") : ["victorfpaula@gmail.com"];
+  return lista.map((e) => e.trim().toLowerCase()).filter(Boolean);
+}
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  if (ROTAS_PUBLICAS.some((rota) => pathname.startsWith(rota))) {
+  if (PAGINAS_PUBLICAS.has(pathname) || PREFIXOS_PUBLICOS.some((prefixo) => pathname.startsWith(prefixo))) {
     return NextResponse.next();
   }
 
@@ -30,18 +46,22 @@ export async function middleware(req: NextRequest) {
     }
   );
 
+  // getUser() confere o token de verdade com o Supabase; getSession() só lê o
+  // cookie, que dá pra forjar.
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  if (!session) {
+  const autorizado = !!user?.email && emailsPermitidos().includes(user.email.toLowerCase());
+
+  if (!autorizado) {
     // Chamadas de API (fetch do navegador) precisam de uma resposta JSON com
     // status 401, não de um redirect pra página de login em HTML — senão o
     // app trava tentando interpretar HTML como JSON e nada é salvo.
     if (pathname.startsWith("/api/")) {
       return NextResponse.json(
         { erro: "Sessão expirada. Atualize a página e faça login de novo." },
-        { status: 401 }
+        { status: user ? 403 : 401 }
       );
     }
     const loginUrl = new URL("/login", req.url);
@@ -59,6 +79,6 @@ export const config = {
   // exclusão, esse pedido caía no redirect pra /login e o ícone/splash não
   // aparecia.
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|manifest.webmanifest).*)",
+    "/((?!_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|loading-icon.png|manifest.webmanifest).*)",
   ],
 };

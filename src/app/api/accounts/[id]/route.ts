@@ -26,7 +26,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     .from("accounts")
     .update(patch)
     .eq("id", id)
-    .select("*")
+    .select("id, name, page_id, ig_user_id, ig_username, is_active, token_obtained_at, avatar_url, avatar_atualizado_em, created_at, cross_post_facebook")
     .maybeSingle();
 
   if (error) {

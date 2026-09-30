@@ -113,6 +113,9 @@ export interface FeedPostMedia {
 
 // Em qual conta esse post vai (ou já foi) publicado — status individual, pois
 // o mesmo post pode ir pra várias contas e cada uma pode ter um resultado diferente.
+// Conta como pode ir pro navegador: tudo menos o page_access_token.
+export type ContaPublica = Omit<Account, "page_access_token">;
+
 export interface FeedPostAccount {
   id: string;
   feed_post_id: string;
