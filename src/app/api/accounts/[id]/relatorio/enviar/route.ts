@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { enviarEmail } from "@/lib/email";
+import { gerarPdfConta, nomeArquivoPdf } from "@/lib/relatorioPdf";
 import { gerarRelatorioMensal, mesValido, renderizarRelatorioHtml, renderizarRelatorioTexto } from "@/lib/relatorio";
 
 // Manda pro e-mail do Victor o relatório de UMA conta (botão "Enviar por
@@ -22,6 +23,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     assunto: `Relatório de ${relatorio.rotuloMes} — ${relatorio.contas[0].nome}`,
     corpo: renderizarRelatorioTexto(relatorio),
     html: renderizarRelatorioHtml(relatorio),
+    anexos: [
+      {
+        nome: nomeArquivoPdf(relatorio, relatorio.contas[0]),
+        conteudo: Buffer.from(await gerarPdfConta(relatorio, relatorio.contas[0])).toString("base64"),
+      },
+    ],
   });
   if (!enviado) {
     return NextResponse.json({ erro: "Não consegui enviar o e-mail. Confira RESEND_API_KEY e ALERT_EMAIL." }, { status: 502 });

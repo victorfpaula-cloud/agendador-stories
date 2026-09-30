@@ -15,16 +15,17 @@ const REGISTRO_COMPLETO_DESDE = "2026-10-01";
 
 type Admin = ReturnType<typeof createAdminClient>;
 
-export type DiaStories = { data: string; diaSemana: number; agendador: number; storyEngine: number; autostory: number; total: number };
-export type DiaFeed = { data: string; diaSemana: number; fotos: number; carrosseis: number; videos: number; reels: number; total: number };
+// Só o dia e a quantidade — o Victor pediu o relatório simples (30/09/2026),
+// sem separar por ferramenta que publicou.
+export type DiaContagem = { data: string; diaSemana: number; total: number };
 
 export type RelatorioConta = {
   id: string;
   nome: string;
   usuario: string | null;
-  stories: DiaStories[];
+  stories: DiaContagem[];
   totalStories: number;
-  feed: DiaFeed[];
+  feed: DiaContagem[]; // só os dias com publicação (vazio = sem tabela)
   totalFeed: number;
 };
 
@@ -110,30 +111,23 @@ export async function gerarRelatorioMensal(
   );
 
   const relatorio: RelatorioConta[] = contas.map((conta) => {
-    const stories: DiaStories[] = dias.map((d) => ({ ...d, agendador: 0, storyEngine: 0, autostory: 0, total: 0 }));
-    const feed: DiaFeed[] = dias.map((d) => ({ ...d, fotos: 0, carrosseis: 0, videos: 0, reels: 0, total: 0 }));
+    const stories: DiaContagem[] = dias.map((d) => ({ ...d, total: 0 }));
+    const feed: DiaContagem[] = dias.map((d) => ({ ...d, total: 0 }));
     const indice = new Map(dias.map((d, i) => [d.data, i]));
 
+    // Stories = Agendador (publish_log) + Story Engine + AutoStory.
     for (const l of logs) {
       if (l.account_id !== conta.id) continue;
       const i = indice.get(l.scheduled_for);
-      if (i !== undefined) stories[i].agendador += 1;
+      if (i !== undefined) stories[i].total += 1;
     }
     for (const h of historico) {
       if (h.account_id !== conta.id) continue;
       const i = indice.get(h.dia);
       if (i === undefined) continue;
-      if (h.origem === "story_engine") stories[i].storyEngine += 1;
-      else if (h.origem === "autostory") stories[i].autostory += 1;
-      else if (h.origem === "feed") {
-        if (h.tipo === "CAROUSEL") feed[i].carrosseis += 1;
-        else if (h.tipo === "REELS") feed[i].reels += 1;
-        else if (h.tipo === "VIDEO") feed[i].videos += 1;
-        else feed[i].fotos += 1;
-      }
+      if (h.origem === "feed") feed[i].total += 1;
+      else stories[i].total += 1;
     }
-    for (const s of stories) s.total = s.agendador + s.storyEngine + s.autostory;
-    for (const f of feed) f.total = f.fotos + f.carrosseis + f.videos + f.reels;
 
     const feedComPosts = feed.filter((f) => f.total > 0);
     return {
@@ -168,118 +162,102 @@ function dataBr(iso: string): string {
   return `${d}/${m}`;
 }
 
-function celula(valor: number, negrito = false): string {
+function celula(valor: number, fundo: string): string {
   const cor = valor === 0 ? COR.mudo : COR.texto;
-  return `<td align="center" style="padding:7px 8px;border-bottom:1px solid ${COR.linha};font-size:13px;color:${cor};${negrito ? "font-weight:700;" : ""}">${valor === 0 ? "–" : valor}</td>`;
+  return `<td align="right" style="padding:6px 10px;border-bottom:1px solid ${COR.linha};font-size:13px;font-weight:700;color:${cor};${fundo}">${valor === 0 ? "–" : valor}</td>`;
 }
 
-function cabecalho(colunas: string[]): string {
-  return `<tr>${colunas
-    .map(
-      (c, i) =>
-        `<th align="${i < 2 ? "left" : "center"}" style="padding:8px;background:${COR.zebra};border-bottom:2px solid ${COR.linha};font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:${COR.suave};font-weight:600;">${c}</th>`
-    )
-    .join("")}</tr>`;
-}
-
-function linhaDia(d: { data: string; diaSemana: number }, valores: number[], total: number): string {
+function linhaDia(d: DiaContagem): string {
   const fundo = d.diaSemana >= 6 ? `background:${COR.fimDeSemana};` : "";
-  const base = `padding:7px 8px;border-bottom:1px solid ${COR.linha};font-size:13px;${fundo}`;
   return (
-    `<tr style="${fundo}">` +
-    `<td style="${base}color:${COR.suave};">${dataBr(d.data)}</td>` +
-    `<td style="${base}color:${COR.texto};">${curto(d.diaSemana)}</td>` +
-    valores.map((v) => celula(v)).join("") +
-    celula(total, true) +
-    `</tr>`
+    `<tr><td style="padding:6px 10px;border-bottom:1px solid ${COR.linha};font-size:13px;color:${COR.texto};${fundo}">` +
+    `${dataBr(d.data)} <span style="color:${COR.suave};">· ${curto(d.diaSemana)}</span></td>${celula(d.total, fundo)}</tr>`
   );
 }
 
-function tabela(titulo: string, cabecalhoColunas: string[], linhas: string, rodape: string): string {
+function mini(titulo: string, dias: DiaContagem[]): string {
   return (
-    `<div style="margin:22px 0 6px;font-size:15px;font-weight:700;color:${COR.texto};">${titulo}</div>` +
-    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid ${COR.linha};border-radius:8px;">` +
-    cabecalho(cabecalhoColunas) +
-    linhas +
-    rodape +
+    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid ${COR.linha};">` +
+    `<tr><th align="left" style="padding:7px 10px;background:${COR.zebra};border-bottom:2px solid ${COR.linha};font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:${COR.suave};">Dia</th>` +
+    `<th align="right" style="padding:7px 10px;background:${COR.zebra};border-bottom:2px solid ${COR.linha};font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:${COR.suave};">${titulo}</th></tr>` +
+    dias.map(linhaDia).join("") +
     `</table>`
   );
 }
 
-function rodapeTotais(rotulo: string, totais: number[], total: number): string {
-  const td = (v: number) =>
-    `<td align="center" style="padding:9px 8px;font-size:13px;font-weight:700;color:${COR.marca};background:${COR.zebra};">${v}</td>`;
-  return `<tr><td colspan="2" style="padding:9px 8px;font-size:13px;font-weight:700;color:${COR.texto};background:${COR.zebra};">${rotulo}</td>${totais.map(td).join("")}${td(total)}</tr>`;
+// Divide a lista de dias em duas colunas lado a lado (tabela dentro de
+// tabela, que é o que funciona em qualquer app de e-mail).
+function duasColunas(titulo: string, dias: DiaContagem[]): string {
+  const meio = Math.ceil(dias.length / 2);
+  const esquerda = dias.slice(0, meio);
+  const direita = dias.slice(meio);
+  return (
+    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>` +
+    `<td width="50%" valign="top" style="padding-right:6px;">${mini(titulo, esquerda)}</td>` +
+    `<td width="50%" valign="top" style="padding-left:6px;">${direita.length ? mini(titulo, direita) : ""}</td>` +
+    `</tr></table>`
+  );
 }
 
-function secaoConta(c: RelatorioConta): string {
-  const soma = (f: (d: DiaStories) => number) => c.stories.reduce((s, d) => s + f(d), 0);
-  const somaFeed = (f: (d: DiaFeed) => number) => c.feed.reduce((s, d) => s + f(d), 0);
-
-  const storiesHtml = tabela(
-    "Stories",
-    ["Data", "Dia", "Agendador", "Story Engine", "AutoStory", "Total"],
-    c.stories.map((d) => linhaDia(d, [d.agendador, d.storyEngine, d.autostory], d.total)).join(""),
-    rodapeTotais("Total do mês", [soma((d) => d.agendador), soma((d) => d.storyEngine), soma((d) => d.autostory)], c.totalStories)
-  );
-
-  const feedHtml =
-    c.feed.length > 0
-      ? tabela(
-          "Feed e Reels",
-          ["Data", "Dia", "Fotos", "Carrosséis", "Vídeos", "Reels", "Total"],
-          c.feed.map((d) => linhaDia(d, [d.fotos, d.carrosseis, d.videos, d.reels], d.total)).join(""),
-          rodapeTotais("Total do mês", [somaFeed((d) => d.fotos), somaFeed((d) => d.carrosseis), somaFeed((d) => d.videos), somaFeed((d) => d.reels)], c.totalFeed)
-        )
-      : "";
-
+function secaoConta(c: RelatorioConta, primeira: boolean): string {
   const usuario = c.usuario ? ` <span style="font-weight:400;color:${COR.suave};">@${esc(c.usuario)}</span>` : "";
+  const feed =
+    c.feed.length > 0
+      ? `<div style="margin:22px 0 8px;font-size:15px;font-weight:700;color:${COR.texto};">Feed e Reels · ${c.totalFeed} no mês</div>${duasColunas("Posts", c.feed)}`
+      : "";
+  // Cada cliente começa numa página nova quando o e-mail é impresso ou salvo
+  // em PDF.
+  const quebra = primeira ? "" : "page-break-before:always;break-before:page;";
   return (
-    `<div style="margin-top:34px;padding-top:22px;border-top:3px solid ${COR.marca};">` +
+    `<div style="${quebra}margin-top:${primeira ? 26 : 40}px;padding-top:20px;border-top:3px solid ${COR.marca};">` +
     `<div style="font-size:20px;font-weight:700;color:${COR.texto};">${esc(c.nome)}${usuario}</div>` +
-    storiesHtml +
-    feedHtml +
+    `<div style="margin:16px 0 8px;font-size:15px;font-weight:700;color:${COR.texto};">Stories · ${c.totalStories} no mês</div>` +
+    duasColunas("Stories", c.stories) +
+    feed +
     `</div>`
   );
 }
 
+const AVISO_PARCIAL =
+  "Os números de AutoStory, Story Engine e Feed/Reels deste mês podem estar incompletos (o registro completo começou em 30/09/2026). Os Stories do Agendador estão completos.";
+
 export function renderizarRelatorioHtml(r: RelatorioMensal): string {
   const resumo =
     r.contas.length > 1
-      ? tabela(
-          "Resumo por conta",
-          ["Conta", "", "Stories", ...(r.incluirFeed ? ["Feed e Reels"] : [])],
-          r.contas
-            .map(
-              (c) =>
-                `<tr><td colspan="2" style="padding:8px;border-bottom:1px solid ${COR.linha};font-size:13px;color:${COR.texto};">${esc(c.nome)}</td>` +
-                celula(c.totalStories, true) +
-                (r.incluirFeed ? celula(c.totalFeed, true) : "") +
-                `</tr>`
-            )
-            .join(""),
-          ""
-        )
+      ? `<div style="margin:22px 0 8px;font-size:15px;font-weight:700;">Resumo</div>` +
+        `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid ${COR.linha};">` +
+        r.contas
+          .map(
+            (c) =>
+              `<tr><td style="padding:7px 10px;border-bottom:1px solid ${COR.linha};font-size:13px;">${esc(c.nome)}</td>` +
+              `<td align="right" style="padding:7px 10px;border-bottom:1px solid ${COR.linha};font-size:13px;font-weight:700;">${c.totalStories} Stories` +
+              (r.incluirFeed && c.totalFeed > 0 ? ` · ${c.totalFeed} Feed/Reels` : "") +
+              `</td></tr>`
+          )
+          .join("") +
+        `</table>`
       : "";
 
   const aviso = r.parcial
-    ? `<div style="margin-top:26px;padding:10px 12px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;font-size:12px;color:#92400e;line-height:1.5;">Atenção: o registro completo de AutoStory, Story Engine e Feed/Reels começou em 30/09/2026. Neste mês, esses números incluem só as publicações que ainda estavam guardadas; os Stories do Agendador estão completos.</div>`
+    ? `<div style="margin-top:26px;padding:10px 12px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;font-size:12px;color:#92400e;line-height:1.5;">${AVISO_PARCIAL}</div>`
     : "";
 
-  const corpo = r.contas.length === 0
-    ? `<div style="margin-top:26px;font-size:14px;color:${COR.suave};">Nenhuma publicação registrada neste mês.</div>`
-    : resumo + r.contas.map(secaoConta).join("");
+  const corpo =
+    r.contas.length === 0
+      ? `<div style="margin-top:26px;font-size:14px;color:${COR.suave};">Nenhuma publicação registrada neste mês.</div>`
+      : resumo + r.contas.map((c, i) => secaoConta(c, i === 0)).join("");
 
   return (
     `<div style="font-family:${FONTE};max-width:640px;margin:0 auto;padding:24px 16px;color:${COR.texto};">` +
     `<div style="font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:${COR.marca};font-weight:700;">Agendador de Stories</div>` +
     `<div style="margin-top:4px;font-size:26px;font-weight:700;">Relatório de ${esc(r.rotuloMes)}</div>` +
-    `<div style="margin-top:4px;font-size:14px;color:${COR.suave};">Publicações que foram ao ar no mês, por dia.</div>` +
     corpo +
     aviso +
     `</div>`
   );
 }
+
+export const AVISO_PARCIAL_PDF = AVISO_PARCIAL;
 
 export function renderizarRelatorioTexto(r: RelatorioMensal): string {
   const linhas = [`Relatório de ${r.rotuloMes}`, ""];

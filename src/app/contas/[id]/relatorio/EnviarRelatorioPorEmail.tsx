@@ -38,6 +38,12 @@ export default function EnviarRelatorioPorEmail({
       {resultado && (
         <span className={`text-xs ${resultado.ok ? "text-green-600" : "text-red-600"}`}>{resultado.texto}</span>
       )}
+      <a
+        href={`/api/accounts/${accountId}/relatorio/pdf?mes=${mes}&feed=${incluirFeed ? 1 : 0}`}
+        className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700"
+      >
+        Baixar PDF
+      </a>
       <button
         type="button"
         onClick={enviar}
