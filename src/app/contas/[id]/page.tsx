@@ -6,6 +6,7 @@ import type { Account, PublishLog, ScheduleSlot } from "@/types/database";
 import WeekEditor from "./WeekEditor";
 import DuplicarRotina from "./DuplicarRotina";
 import ContaTabs from "./ContaTabs";
+import GerarRelatorio from "./GerarRelatorio";
 
 export const dynamic = "force-dynamic";
 
@@ -120,12 +121,15 @@ export default async function ContaPage({ params }: { params: { id: string } }) 
             />
           </div>
         </div>
-        <a
-          href="/api/accounts/connect"
-          className="whitespace-nowrap rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:border-brand-400 hover:text-brand-600"
-        >
-          Reconectar
-        </a>
+        <div className="flex flex-col items-stretch gap-2 sm:flex-row">
+          <GerarRelatorio accountId={(conta as Account).id} />
+          <a
+            href="/api/accounts/connect"
+            className="whitespace-nowrap rounded-lg border border-slate-300 px-3 py-2 text-center text-sm text-slate-600 hover:border-brand-400 hover:text-brand-600"
+          >
+            Reconectar
+          </a>
+        </div>
       </div>
 
       <ContaTabs accountId={(conta as Account).id} />
