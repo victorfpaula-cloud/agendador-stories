@@ -4,6 +4,21 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 const BUCKET = "story-media";
 
+// Nome/pasta vêm de fora (nome de arquivo do navegador ou do Drive) e entram
+// no caminho gravado no Storage — só aceita caracteres inofensivos, pra nada
+// como "../" ou uma extensão estranha chegar no caminho.
+function extensaoSegura(nomeArquivo: string, padrao: string): string {
+  const ext = (nomeArquivo.split(".").pop() || "").toLowerCase();
+  return /^[a-z0-9]{1,5}$/.test(ext) ? ext : padrao;
+}
+
+function pastaSegura(pasta: string): string {
+  if (!/^[A-Za-z0-9_-]+(\/[A-Za-z0-9_-]+)*$/.test(pasta)) {
+    throw new Error("Pasta de destino inválida.");
+  }
+  return pasta;
+}
+
 // Formatos de foto que o sharp sabe reabrir e regravar. GIF fica de fora
 // (pode ser animado — reabrir sem cuidado achataria os quadros extras) e
 // SVG é vetorial, não passa pelo sharp.
@@ -49,10 +64,8 @@ export async function enviarMidiaBuffer(
   mimeType: string,
   nomeArquivoOriginal: string
 ) {
-  const extensao = (
-    nomeArquivoOriginal.split(".").pop() || (mimeType.startsWith("video/") ? "mp4" : "jpg")
-  ).toLowerCase();
-  const path = `${pasta}/${randomUUID()}.${extensao}`;
+  const extensao = extensaoSegura(nomeArquivoOriginal, mimeType.startsWith("video/") ? "mp4" : "jpg");
+  const path = `${pastaSegura(pasta)}/${randomUUID()}.${extensao}`;
   buffer = await semMetadado(buffer, mimeType);
 
   const { error } = await admin.storage.from(bucket).upload(path, buffer, {
@@ -86,8 +99,8 @@ export async function criarUploadAssinado(
   pasta: string,
   fileName: string
 ) {
-  const extensao = (fileName.split(".").pop() || "dat").toLowerCase();
-  const path = `${pasta}/${randomUUID()}.${extensao}`;
+  const extensao = extensaoSegura(fileName, "dat");
+  const path = `${pastaSegura(pasta)}/${randomUUID()}.${extensao}`;
 
   const { data, error } = await admin.storage.from(bucket).createSignedUploadUrl(path);
 

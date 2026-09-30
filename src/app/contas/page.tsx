@@ -1,7 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { agoraEmSaoPaulo } from "@/lib/days";
 import { buscarStoryEngineHoje } from "@/lib/storyCicloResumo";
-import type { Account } from "@/types/database";
+import type { ContaPublica } from "@/types/database";
 import LogoutButton from "./LogoutButton";
 import ListaContas, { type ResumoDoDia } from "./ListaContas";
 
@@ -13,12 +13,15 @@ export default async function ContasPage({
   searchParams: { erro?: string };
 }) {
   const admin = createAdminClient();
+  // Sem page_access_token de propósito: essa lista vai inteira pro navegador
+  // (ListaContas é componente de cliente) e o token das Páginas nunca deve
+  // sair do servidor.
   const { data: contas } = await admin
     .from("accounts")
-    .select("*")
+    .select("id, name, page_id, ig_user_id, ig_username, is_active, token_obtained_at, avatar_url, avatar_atualizado_em, created_at, cross_post_facebook")
     .order("name", { ascending: true });
 
-  const lista = (contas ?? []) as Account[];
+  const lista = (contas ?? []) as unknown as ContaPublica[];
 
   // Resumo do dia por conta (pra mostrar "3 de 10 postados" nos cards).
   // Só duas consultas no total, independente de quantas contas existirem.
