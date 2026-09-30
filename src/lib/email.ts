@@ -9,14 +9,14 @@
 // motivo pra travar ou confundir o status de uma publicação real.
 const RESEND_API_URL = "https://api.resend.com/emails";
 
-export async function enviarEmail({ assunto, corpo }: { assunto: string; corpo: string }) {
+export async function enviarEmail({ assunto, corpo, html }: { assunto: string; corpo: string; html?: string }) {
   const apiKey = process.env.RESEND_API_KEY;
   const destinatario = process.env.ALERT_EMAIL;
 
-  if (!apiKey || !destinatario) return;
+  if (!apiKey || !destinatario) return false;
 
   try {
-    await fetch(RESEND_API_URL, {
+    const res = await fetch(RESEND_API_URL, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -30,10 +30,14 @@ export async function enviarEmail({ assunto, corpo }: { assunto: string; corpo: 
         to: [destinatario],
         subject: assunto,
         text: corpo,
+        ...(html ? { html } : {}),
       }),
       cache: "no-store",
     });
+    return res.ok;
   } catch {
-    // Ignorado de propósito — ver comentário no topo do arquivo.
+    // Ignorado de propósito — ver comentário no topo do arquivo. Quem quiser
+    // saber se chegou (ex: relatório manual) olha o boolean devolvido.
+    return false;
   }
 }
