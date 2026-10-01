@@ -45,9 +45,9 @@ function chave(): string {
   return k;
 }
 
-async function chamar(modelo: string, corpo: unknown): Promise<RespostaGemini> {
+async function chamar(modelo: string, corpo: unknown, timeoutMs = TEMPO_LIMITE_MS): Promise<RespostaGemini> {
   const controle = new AbortController();
-  const timer = setTimeout(() => controle.abort(), TEMPO_LIMITE_MS);
+  const timer = setTimeout(() => controle.abort(), timeoutMs);
   let res: Response;
   try {
     res = await fetch(`${BASE}/${modelo}:generateContent`, {
@@ -84,6 +84,7 @@ export async function gerarImagem(opts: {
   prompt: string;
   referencias: Referencia[];
   aspecto: string; // "9:16", "4:5", "1:1", "16:9"
+  timeoutMs?: number;
 }): Promise<{ imagem: Buffer; mimeType: string; modelo: string; comentario: string }> {
   const modelo = modeloDe(opts.qualidade);
 
@@ -102,7 +103,7 @@ export async function gerarImagem(opts: {
       },
     ],
     generationConfig: { responseModalities: ["TEXT", "IMAGE"], imageConfig },
-  });
+  }, opts.timeoutMs);
 
   if (json.promptFeedback?.blockReason) {
     throw new GeminiErro("O Gemini recusou esse pedido por política de segurança. Reescreva o pedido de outro jeito.");

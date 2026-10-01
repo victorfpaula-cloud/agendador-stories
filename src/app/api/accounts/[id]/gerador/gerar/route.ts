@@ -8,12 +8,14 @@ import {
   FORMATOS,
   baixarDoBucket,
   carregarMarca,
+  ehAngulo,
   ehEstiloLettering,
   ehFormato,
   ehModo,
   exigePremium,
   finalizarImagem,
   montarPrompt,
+  quaseIgual,
 } from "@/lib/geradorImagens";
 
 // Uma chamada = UMA imagem. Pra gerar variações, o navegador dispara várias
@@ -43,12 +45,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const usarLogo = form.get("usarLogo") === "1";
   const estiloBruto: unknown = form.get("estiloLettering");
   const estiloLettering = ehEstiloLettering(estiloBruto) ? estiloBruto : "auto";
+  const anguloBruto: unknown = form.get("angulo");
+  const angulo = ehAngulo(anguloBruto) ? anguloBruto : "livre";
   const baseId = String(form.get("baseImagemId") ?? "");
 
   if (!ehModo(modo) || !ehFormato(formato)) return NextResponse.json({ erro: "Modo ou formato inválido." }, { status: 400 });
-  // Texto na imagem sempre vai pro Premium (o Rápido erra letras e desenha mal).
-  const qualidade: Qualidade = form.get("qualidade") === "premium" || exigePremium(modo, textoExato) ? "premium" : "rapido";
-  if (pedido.length < 3) return NextResponse.json({ erro: "Descreva o que você quer na imagem." }, { status: 400 });
+  if (modo !== "angulo" && pedido.length < 3) return NextResponse.json({ erro: "Descreva o que você quer na imagem." }, { status: 400 });
   if (pedido.length > 4000) return NextResponse.json({ erro: "Pedido grande demais." }, { status: 400 });
 
   // Teto diário (todas as contas somadas) pra um clique maluco não virar conta alta.
@@ -80,7 +82,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
   }
 
-  const maxRefs = qualidade === "premium" ? 6 : 3;
+  const maxRefs = 6;
   for (const item of form.getAll("refs")) {
     if (!(item instanceof File)) continue;
     if (!MIMES_OK.has(item.type)) return NextResponse.json({ erro: "Referência precisa ser JPG, PNG ou WebP." }, { status: 400 });
@@ -88,19 +90,24 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     referencias.push({ mimeType: item.type, data: Buffer.from(await item.arrayBuffer()) });
   }
   if (referencias.length > maxRefs) {
-    return NextResponse.json(
-      { erro: `No modo ${qualidade === "premium" ? "Premium" : "Rápido"} cabem até ${maxRefs} imagens de referência.` },
-      { status: 400 }
-    );
+    return NextResponse.json({ erro: `Cabem até ${maxRefs} imagens de referência.` }, { status: 400 });
   }
-  if (modo === "produto" && referencias.length === 0) {
-    return NextResponse.json({ erro: "Pra melhorar um produto, envie a foto dele como referência." }, { status: 400 });
+  if ((modo === "produto" || modo === "angulo") && referencias.length === 0) {
+    return NextResponse.json({ erro: "Envie a foto do produto/prato como referência." }, { status: 400 });
   }
+  if (modo === "angulo" && angulo === "livre" && pedido.length < 3) {
+    return NextResponse.json({ erro: "Descreva o ângulo que você quer (ou escolha um dos botões)." }, { status: 400 });
+  }
+
+  // Texto na imagem e trabalho com referência sempre vão pro Premium (o
+  // Rápido erra letras, desenha mal e tende a devolver a referência igual).
+  const qualidade: Qualidade =
+    form.get("qualidade") === "premium" || exigePremium(modo, textoExato, referencias.length > 0) ? "premium" : "rapido";
 
   const marca = await carregarMarca(admin, params.id);
   const comLogo = usarLogo && !!marca?.logo_path;
 
-  const prompt = montarPrompt({
+  const parametrosPrompt = {
     modo,
     formato,
     pedido,
@@ -110,10 +117,39 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     usarLogo: comLogo,
     qtdReferencias: referencias.length,
     estiloLettering,
-  });
+    angulo,
+  };
+  const prompt = montarPrompt(parametrosPrompt);
 
   try {
-    const r = await gerarImagem({ qualidade, prompt, referencias, aspecto: FORMATOS[formato].aspecto });
+    const inicio = Date.now();
+    const aspecto = FORMATOS[formato].aspecto;
+    let r = await gerarImagem({ qualidade, prompt, referencias, aspecto });
+    let aviso: string | null = null;
+
+    // Trava anti-cópia: se o modelo devolveu a própria referência quase
+    // igual (num modo que pede mudança), tenta de novo com mais força — só
+    // se ainda der tempo dentro dos 60s da função.
+    const pedeMudanca = modo === "angulo" || modo === "produto" || (modo === "criar" && referencias.length > 0);
+    if (pedeMudanca && (await quaseIgual(r.imagem, referencias[0].data))) {
+      const restante = 54_000 - (Date.now() - inicio);
+      aviso = "A IA devolveu quase a mesma foto da referência. Use \"Refazer\" ou descreva a mudança com mais detalhe.";
+      if (restante >= 15_000) {
+        try {
+          const r2 = await gerarImagem({
+            qualidade,
+            prompt: montarPrompt({ ...parametrosPrompt, reforcoAnticopia: true }),
+            referencias,
+            aspecto,
+            timeoutMs: restante,
+          });
+          r = r2;
+          if (!(await quaseIgual(r2.imagem, referencias[0].data))) aviso = null;
+        } catch {
+          // mantém a primeira imagem com o aviso
+        }
+      }
+    }
 
     let logo = null;
     if (comLogo && marca?.logo_path) {
@@ -149,7 +185,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       .single();
     if (error) throw new Error(error.message);
 
-    return NextResponse.json({ imagem: linha });
+    return NextResponse.json({ imagem: linha, aviso });
   } catch (err) {
     const status = err instanceof GeminiErro ? 502 : 500;
     return NextResponse.json({ erro: err instanceof Error ? err.message : "Erro ao gerar a imagem." }, { status });

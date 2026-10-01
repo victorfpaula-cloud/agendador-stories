@@ -312,7 +312,7 @@ export interface ImagemGerada {
   url: string;
   formato: "story" | "feed" | "quadrado" | "paisagem";
   modelo: string;
-  modo: "criar" | "produto" | "lettering" | "editar";
+  modo: "criar" | "produto" | "angulo" | "lettering" | "editar";
   pedido: string;
   prompt_final: string;
   com_logo: boolean;

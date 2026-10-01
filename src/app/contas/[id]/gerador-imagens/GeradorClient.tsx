@@ -28,6 +28,12 @@ const MODOS: { id: ModoId; rotulo: string; dica: string; placeholder: string }[]
     placeholder: "Ex: Colocar o produto sobre mármore claro, luz natural de janela, estilo catálogo premium.",
   },
   {
+    id: "angulo",
+    rotulo: "Novo ângulo",
+    dica: "Mesmo prato, outra câmera (macro, 45°…)",
+    placeholder: "Opcional. Ex: Fundo escuro, vapor saindo, luz quente vindo da esquerda.",
+  },
+  {
     id: "lettering",
     rotulo: "Arte com texto",
     dica: "Lettering / promoção / aviso",
@@ -45,6 +51,14 @@ const ESTILOS_LETTERING: { id: string; rotulo: string }[] = [
   { id: "tridimensional", rotulo: "3D" },
   { id: "minimalista", rotulo: "Minimalista" },
   { id: "rustico", rotulo: "Rústico artesanal" },
+];
+
+const ANGULOS: { id: string; rotulo: string }[] = [
+  { id: "macro", rotulo: "Macro (bem de perto)" },
+  { id: "tres_quartos", rotulo: "45° (3/4)" },
+  { id: "topo", rotulo: "De cima (flat lay)" },
+  { id: "rente", rotulo: "Rente à mesa" },
+  { id: "livre", rotulo: "Do jeito que eu pedir" },
 ];
 
 const POSICOES: { id: string; rotulo: string }[] = [
@@ -102,6 +116,8 @@ export default function GeradorClient({
   const [pedido, setPedido] = useState("");
   const [textoExato, setTextoExato] = useState("");
   const [estiloLettering, setEstiloLettering] = useState("auto");
+  const [angulo, setAngulo] = useState("macro");
+  const [avisos, setAvisos] = useState<string[]>([]);
   const [usarLogo, setUsarLogo] = useState(!!marcaInicial.logoUrl);
   const [variacoes, setVariacoes] = useState(2);
   const [refs, setRefs] = useState<Ref[]>([]);
@@ -118,8 +134,10 @@ export default function GeradorClient({
   // Com texto na imagem o servidor sempre usa o Premium (o Rápido desenha
   // letras mal), então a tela já mostra isso.
   const temTexto = modo === "lettering" || textoExato.trim().length > 0;
-  const qualidadeEfetiva = temTexto ? "premium" : qualidade;
-  const maxRefs = qualidadeEfetiva === "premium" ? 6 : 3;
+  // Referência também força o Premium: o Rápido tende a devolver a foto igual.
+  const forcaPremium = temTexto || modo === "produto" || modo === "angulo" || (refs.length > 0 && modo !== "editar");
+  const qualidadeEfetiva = forcaPremium ? "premium" : qualidade;
+  const maxRefs = 6;
 
   async function adicionarRefs(lista: FileList | null) {
     if (!lista) return;
@@ -161,6 +179,7 @@ export default function GeradorClient({
     form.set("formato", formato);
     form.set("qualidade", qualidadeEfetiva);
     form.set("estiloLettering", estiloLettering);
+    form.set("angulo", angulo);
     form.set("pedido", pedido);
     form.set("textoExato", textoExato);
     form.set("usarLogo", usarLogo && marca.logoUrl ? "1" : "0");
@@ -173,6 +192,7 @@ export default function GeradorClient({
       if (!res.ok) throw new Error(json?.erro || (res.status === 504 ? "Demorou demais. Tente \"Rápido\"." : "Erro ao gerar."));
       setGerando((g) => g.filter((x) => x.id !== id));
       setGaleria((g) => [json.imagem as ImagemGerada, ...g]);
+      if (json.aviso) setAvisos((a) => (a.includes(json.aviso) ? a : [...a, json.aviso]));
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Erro ao gerar.";
       setGerando((g) => g.map((x) => (x.id === id ? { ...x, erro: msg } : x)));
@@ -181,7 +201,17 @@ export default function GeradorClient({
 
   function gerar() {
     setErro(null);
-    if (pedido.trim().length < 3) {
+    setAvisos([]);
+    if (modo === "angulo") {
+      if (refs.length === 0) {
+        setErro("Anexe a foto do prato/produto em \"Imagens de referência\".");
+        return;
+      }
+      if (angulo === "livre" && pedido.trim().length < 3) {
+        setErro("Descreva o ângulo que você quer.");
+        return;
+      }
+    } else if (pedido.trim().length < 3) {
       setErro("Descreva o que você quer na imagem.");
       return;
     }
@@ -277,7 +307,7 @@ export default function GeradorClient({
             </button>
           </div>
         ) : (
-          <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
             {MODOS.map((m) => (
               <button
                 key={m.id}
@@ -310,8 +340,31 @@ export default function GeradorClient({
           ))}
         </div>
 
+        {modo === "angulo" && !emEdicao && (
+          <div className="mb-4">
+            <div className="mb-1 text-sm font-medium text-slate-700">Qual ângulo?</div>
+            <div className="flex flex-wrap gap-2">
+              {ANGULOS.map((a) => (
+                <button
+                  key={a.id}
+                  type="button"
+                  onClick={() => setAngulo(a.id)}
+                  className={`rounded-full px-3 py-1.5 text-sm transition ${
+                    angulo === a.id ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  }`}
+                >
+                  {a.rotulo}
+                </button>
+              ))}
+            </div>
+            <p className="mt-1 text-xs text-slate-500">
+              Anexe a foto do prato abaixo em “Imagens de referência”. A IA mantém o prato igual e muda só a posição da câmera.
+            </p>
+          </div>
+        )}
+
         <label className="mb-1 block text-sm font-medium text-slate-700">
-          {emEdicao ? "O que mudar?" : "O que você quer?"}
+          {emEdicao ? "O que mudar?" : modo === "angulo" ? "Observações (opcional)" : "O que você quer?"}
         </label>
         <textarea
           value={pedido}
@@ -373,7 +426,7 @@ export default function GeradorClient({
             <label className="mb-1 block text-sm font-medium text-slate-700">
               Imagens de referência{" "}
               <span className="font-normal text-slate-400">
-                ({modo === "produto" ? "a foto do produto — obrigatória" : "opcional"}, até {maxRefs})
+                ({modo === "produto" || modo === "angulo" ? "a foto do produto — obrigatória" : "opcional"}, até {maxRefs})
               </span>
             </label>
             <div className="flex flex-wrap gap-2">
@@ -418,7 +471,7 @@ export default function GeradorClient({
                 <button
                   key={q}
                   type="button"
-                  disabled={temTexto && q === "rapido"}
+                  disabled={forcaPremium && q === "rapido"}
                   onClick={() => setQualidade(q)}
                   className={`flex-1 rounded-lg px-3 py-2 text-sm ring-1 transition disabled:opacity-40 ${
                     qualidadeEfetiva === q ? "bg-brand-600 text-white ring-brand-600" : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50"
@@ -473,6 +526,14 @@ export default function GeradorClient({
           Imagens geradas por IA levam a marca invisível do Google (SynthID) e o Instagram pode rotulá-las como “feito com IA”.
         </p>
       </section>
+
+      {avisos.length > 0 && (
+        <div className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800 ring-1 ring-amber-200">
+          {avisos.map((a) => (
+            <p key={a}>⚠ {a}</p>
+          ))}
+        </div>
+      )}
 
       {gerando.length > 0 && (
         <section className="grid grid-cols-2 gap-3 sm:grid-cols-3">
