@@ -292,3 +292,31 @@ export interface StoryPost {
   published_at: string | null;
   created_at: string;
 }
+
+// Gerador de imagens (Nano Banana). O logo da marca é colado por cima da
+// imagem pronta pelo servidor — nunca passa pelo modelo.
+export interface GeradorMarca {
+  account_id: string;
+  logo_path: string | null;
+  logo_posicao: "superior-esquerdo" | "superior-direito" | "inferior-esquerdo" | "inferior-direito" | "inferior-centro" | "superior-centro" | "centro";
+  logo_tamanho_pct: number;
+  logo_margem_pct: number;
+  estilo: string;
+  updated_at: string;
+}
+
+export interface ImagemGerada {
+  id: string;
+  account_id: string;
+  storage_path: string;
+  url: string;
+  formato: "story" | "feed" | "quadrado" | "paisagem";
+  modelo: string;
+  modo: "criar" | "produto" | "lettering" | "editar";
+  pedido: string;
+  prompt_final: string;
+  com_logo: boolean;
+  favorita: boolean;
+  origem_id: string | null;
+  created_at: string;
+}

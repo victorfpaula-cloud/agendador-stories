@@ -20,7 +20,8 @@ export default function ContaTabs({ accountId }: { accountId: string }) {
   const emPublicacoes = pathname?.startsWith(`${base}/publicacoes`) && !emAutoFeed;
   const emAutoStory = pathname?.startsWith(`${base}/stories-drive`);
   const emStoryEngine = pathname?.startsWith(`${base}/stories-ciclo`);
-  const emStories = !emPublicacoes && !emAutoFeed && !emAutoStory && !emStoryEngine;
+  const emGerador = pathname?.startsWith(`${base}/gerador-imagens`);
+  const emStories = !emPublicacoes && !emAutoFeed && !emAutoStory && !emStoryEngine && !emGerador;
 
   const abas = [
     { href: base, label: "Stories", ativo: emStories, Icone: IconeStories },
@@ -28,6 +29,7 @@ export default function ContaTabs({ accountId }: { accountId: string }) {
     { href: `${base}/publicacoes/drive`, label: "AutoFeed", ativo: !!emAutoFeed, Icone: IconeAutoFeed },
     { href: `${base}/stories-drive`, label: "AutoStory", ativo: !!emAutoStory, Icone: IconeAutoStory },
     { href: `${base}/stories-ciclo`, label: "Story Engine", ativo: !!emStoryEngine, Icone: IconeStoryEngine },
+    { href: `${base}/gerador-imagens`, label: "Gerador de imagens", ativo: !!emGerador, Icone: IconeGerador, largo: true },
   ];
 
   return (
@@ -41,7 +43,7 @@ export default function ContaTabs({ accountId }: { accountId: string }) {
         <Link
           key={aba.href}
           href={aba.href}
-          className={`flex items-center justify-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-2 text-sm font-medium transition ${
+          className={`${"largo" in aba && aba.largo ? "col-span-2 sm:col-span-1 " : ""}flex items-center justify-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-2 text-sm font-medium transition ${
             aba.ativo
               ? "bg-brand-600 text-white shadow-sm"
               : "bg-slate-100 text-slate-600 hover:bg-slate-200"
@@ -116,6 +118,16 @@ export function IconeStoryEngine({ className }: IconeProps) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className}>
       <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+    </svg>
+  );
+}
+
+// Faíscas — Gerador de imagens (IA).
+function IconeGerador({ className }: IconeProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>
+      <path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8L12 3z" />
+      <path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15z" />
     </svg>
   );
 }

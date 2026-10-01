@@ -13,7 +13,13 @@ import PublicacoesClient from "./PublicacoesClient";
 // outras também.
 export const dynamic = "force-dynamic";
 
-export default async function PublicacoesDaContaPage({ params }: { params: { id: string } }) {
+export default async function PublicacoesDaContaPage({
+  params,
+  searchParams,
+}: {
+  params: { id: string };
+  searchParams: { imagem?: string };
+}) {
   const admin = createAdminClient();
 
   const { data: conta } = await admin.from("accounts").select("*").eq("id", params.id).maybeSingle();
@@ -30,6 +36,13 @@ export default async function PublicacoesDaContaPage({ params }: { params: { id:
     .select("*, feed_post_media(*), feed_post_accounts!inner(*, accounts(id, name, ig_username))")
     .eq("feed_post_accounts.account_id", params.id)
     .order("scheduled_at", { ascending: true });
+
+  // "Usar no Feed" do Gerador de imagens: só aceita link do nosso Storage.
+  const baseStorage = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const imagemInicialUrl =
+    baseStorage && searchParams.imagem?.startsWith(`${baseStorage}/storage/v1/object/public/gerador-imagens/`)
+      ? searchParams.imagem
+      : undefined;
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
@@ -54,6 +67,7 @@ export default async function PublicacoesDaContaPage({ params }: { params: { id:
         defaultAccountId={(conta as Account).id}
         initialPosts={(posts ?? []) as FeedPostComDetalhes[]}
         crossPostFacebookInicial={(conta as Account).cross_post_facebook}
+        imagemInicialUrl={imagemInicialUrl}
       />
     </main>
   );

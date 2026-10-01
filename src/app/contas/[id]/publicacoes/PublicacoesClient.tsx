@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { enviarMidiaDireto } from "@/lib/uploadDireto";
 import { gerarThumbnail } from "@/lib/thumbnail";
-import { prepararImagem } from "@/lib/imagemCliente";
+import { marcarComoGeradaPorIA, prepararImagem } from "@/lib/imagemCliente";
 import ChaveFacebook from "../ChaveFacebook";
 import type { FeedPostComDetalhes, FeedPostStatus } from "@/types/database";
 
@@ -83,6 +83,7 @@ export default function PublicacoesClient({
   defaultAccountId,
   initialPosts,
   crossPostFacebookInicial,
+  imagemInicialUrl,
 }: {
   accounts: Conta[];
   defaultAccountId?: string;
@@ -91,6 +92,8 @@ export default function PublicacoesClient({
   // acontecer na prática — essa tela sempre é aberta de dentro de uma
   // conta). Ver ContaTabs/page.tsx.
   crossPostFacebookInicial?: boolean;
+  // Vem do botão "Usar no Feed" do Gerador de imagens.
+  imagemInicialUrl?: string;
 }) {
   const [posts, setPosts] = useState<FeedPostComDetalhes[]>(initialPosts);
 
@@ -124,7 +127,7 @@ export default function PublicacoesClient({
         />
       )}
 
-      <ComporPost accounts={accounts} defaultAccountId={defaultAccountId} onCriado={aoCriar} />
+      <ComporPost accounts={accounts} defaultAccountId={defaultAccountId} onCriado={aoCriar} imagemInicialUrl={imagemInicialUrl} />
 
       <div>
         <h2 className="mb-3 text-sm font-semibold text-slate-700">Agendadas</h2>
@@ -154,12 +157,32 @@ function ComporPost({
   accounts,
   defaultAccountId,
   onCriado,
+  imagemInicialUrl,
 }: {
   accounts: Conta[];
   defaultAccountId?: string;
   onCriado: (post: FeedPostComDetalhes) => void;
+  imagemInicialUrl?: string;
 }) {
   const [files, setFiles] = useState<File[]>([]);
+
+  // Imagem vinda do Gerador de imagens: baixa e já deixa selecionada.
+  useEffect(() => {
+    if (!imagemInicialUrl) return;
+    let cancelado = false;
+    fetch(imagemInicialUrl)
+      .then((r) => (r.ok ? r.blob() : Promise.reject(new Error("falhou"))))
+      .then((blob) => {
+        if (cancelado) return;
+        setFiles([marcarComoGeradaPorIA(new File([blob], "imagem-ia.jpg", { type: blob.type || "image/jpeg" }))]);
+      })
+      .catch(() => {
+        if (!cancelado) setErro("Não consegui carregar a imagem do gerador. Baixe e selecione manualmente.");
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, [imagemInicialUrl]);
   const [caption, setCaption] = useState("");
   // Pré-marca a conta atual (quem entrou por dentro da conta X já quer mandar
   // pra X por padrão), mas continua dando pra marcar outras — broadcast

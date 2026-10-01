@@ -19,7 +19,18 @@
 const DIMENSAO_MAXIMA = 1600; // pixels no lado maior — bem acima do que o Stories chega a exibir
 const QUALIDADE_JPEG = 0.92; // compressão bem leve, praticamente sem perda visível
 
+// Imagens criadas pelo Gerador de imagens (IA). A limpeza de metadado acima
+// existe pra foto REAL que passou por editor com IA não sair rotulada por
+// engano — imagem 100% gerada por IA segue do jeito que foi gerada, sem o
+// redesenho, pra que o app não esconda a origem dela.
+const ARQUIVOS_GERADOS_POR_IA = new WeakSet<File>();
+export function marcarComoGeradaPorIA(file: File): File {
+  ARQUIVOS_GERADOS_POR_IA.add(file);
+  return file;
+}
+
 export async function prepararImagem(file: File): Promise<File> {
+  if (ARQUIVOS_GERADOS_POR_IA.has(file)) return file;
   // Só mexe em foto (nunca em vídeo), e pula formatos que não fazem sentido
   // redesenhar num canvas (SVG é vetorial; GIF pode ser animado e perderia
   // os quadros extras se fosse achatado numa imagem só) — esses dois
