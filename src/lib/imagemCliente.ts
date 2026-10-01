@@ -25,7 +25,18 @@ const QUALIDADE_JPEG = 0.92; // compressão bem leve, praticamente sem perda vis
 // "Enviando mídia…" pra sempre (01/10/2026).
 const TEMPO_LIMITE_MS = 10_000;
 
+// Imagens criadas pelo Gerador de imagens (IA). A limpeza de metadado acima
+// existe pra foto REAL que passou por editor com IA não sair rotulada por
+// engano — imagem 100% gerada por IA segue do jeito que foi gerada, sem o
+// redesenho, pra que o app não esconda a origem dela.
+const ARQUIVOS_GERADOS_POR_IA = new WeakSet<File>();
+export function marcarComoGeradaPorIA(file: File): File {
+  ARQUIVOS_GERADOS_POR_IA.add(file);
+  return file;
+}
+
 export function prepararImagem(file: File): Promise<File> {
+  if (ARQUIVOS_GERADOS_POR_IA.has(file)) return Promise.resolve(file);
   return Promise.race([
     processarImagem(file),
     new Promise<File>((resolve) => setTimeout(() => resolve(file), TEMPO_LIMITE_MS)),
