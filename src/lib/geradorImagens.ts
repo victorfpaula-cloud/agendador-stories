@@ -14,6 +14,7 @@ export type FormatoId = keyof typeof FORMATOS;
 export const MODOS = {
   criar: "Criar arte",
   produto: "Melhorar foto de produto",
+  angulo: "Novo ângulo / enquadramento",
   lettering: "Arte com texto (lettering)",
   editar: "Editar imagem",
 } as const;
@@ -73,10 +74,65 @@ export function ehEstiloLettering(v: unknown): v is EstiloLetteringId {
   return typeof v === "string" && v in ESTILOS_LETTERING;
 }
 
+// Posições de câmera do modo "Novo ângulo".
+export const ANGULOS = {
+  macro: {
+    rotulo: "Macro (bem de perto)",
+    descricao:
+      "fotografia MACRO extrema: câmera muito próxima do prato, lente macro 100mm, enquadrando só uma parte do prato e preenchendo o quadro com textura e detalhes (brilho, vapor, molhos, grãos), profundidade de campo bem rasa com o fundo e as bordas bem desfocados",
+  },
+  tres_quartos: {
+    rotulo: "45° (3/4)",
+    descricao:
+      "câmera a cerca de 45 graus acima do prato (ângulo clássico de cardápio/delivery), mostrando o topo e a lateral do prato, leve profundidade de campo",
+  },
+  topo: {
+    rotulo: "De cima (flat lay)",
+    descricao: "visto diretamente de cima (90 graus, flat lay), composição organizada em torno do prato, com a mesa e os utensílios ao redor",
+  },
+  rente: {
+    rotulo: "Rente à mesa",
+    descricao:
+      "câmera baixa, na altura do prato (ângulo frontal rente à mesa), mostrando as camadas e a altura da comida, com fundo desfocado ao fundo",
+  },
+  livre: {
+    rotulo: "Do jeito que eu pedir",
+    descricao: "o ponto de vista descrito no pedido abaixo",
+  },
+} as const;
+export type AnguloId = keyof typeof ANGULOS;
+export function ehAngulo(v: unknown): v is AnguloId {
+  return typeof v === "string" && v in ANGULOS;
+}
+
 // Quando há texto na imagem, o modelo Rápido erra letras e desenha mal —
 // força o Premium (Nano Banana Pro), que é o bom em tipografia.
-export function exigePremium(modo: ModoId, textoExato: string): boolean {
-  return modo === "lettering" || textoExato.trim().length > 0;
+// O mesmo vale pra qualquer trabalho com imagem de referência (produto,
+// ângulo, estilo): o Premium segue instruções e mantém a identidade do
+// objeto bem melhor.
+export function exigePremium(modo: ModoId, textoExato: string, temReferencia: boolean): boolean {
+  return (
+    modo === "lettering" ||
+    modo === "produto" ||
+    modo === "angulo" ||
+    textoExato.trim().length > 0 ||
+    (temReferencia && modo !== "editar")
+  );
+}
+
+// Detecta quando o modelo devolveu a própria referência (quase) sem mudar:
+// compara miniaturas 48x48 em tons de cinza. Imagem nova do mesmo prato
+// de outro ângulo difere bastante; cópia fica abaixo de ~9/255.
+export async function quaseIgual(a: Buffer, b: Buffer): Promise<boolean> {
+  try {
+    const mini = (x: Buffer) => sharp(x).resize(48, 48, { fit: "fill" }).greyscale().raw().toBuffer();
+    const [ma, mb] = await Promise.all([mini(a), mini(b)]);
+    let soma = 0;
+    for (let i = 0; i < ma.length; i++) soma += Math.abs(ma[i] - mb[i]);
+    return soma / ma.length < 9;
+  } catch {
+    return false;
+  }
 }
 
 export const POSICOES_LOGO = [
@@ -128,14 +184,23 @@ export function montarPrompt(opts: {
   usarLogo: boolean;
   qtdReferencias: number;
   estiloLettering: EstiloLetteringId;
+  angulo?: AnguloId;
+  reforcoAnticopia?: boolean;
 }): string {
   const { modo, formato, pedido, textoExato, marca, usarLogo, qtdReferencias, estiloLettering } = opts;
+  const angulo = opts.angulo ?? "livre";
   const f = FORMATOS[formato];
   const linhas: string[] = [];
 
   if (modo === "produto") {
     linhas.push(
-      "Você é um fotógrafo publicitário. A primeira imagem anexada é o PRODUTO REAL. Preserve o produto exatamente como é: forma, proporções, cores, rótulo, embalagem e qualquer logotipo ou texto impresso nele — não redesenhe, não invente detalhes, não troque a marca. Melhore apenas o entorno: iluminação, fundo, cenário, sombras, reflexos e composição, com qualidade de foto profissional de catálogo."
+      "Você é um fotógrafo publicitário. A primeira imagem anexada é o PRODUTO REAL. Preserve o produto exatamente como é: forma, proporções, cores, rótulo, embalagem e qualquer logotipo ou texto impresso nele — não redesenhe, não invente detalhes, não troque a marca. Melhore apenas o entorno: iluminação, fundo, cenário, sombras, reflexos e composição, com qualidade de foto profissional de catálogo. O resultado NÃO pode ser a mesma foto de entrada: o cenário, a luz e a composição precisam ficar claramente melhores e diferentes."
+    );
+  } else if (modo === "angulo") {
+    linhas.push(
+      `A imagem anexada mostra o prato/produto REAL. Crie uma FOTOGRAFIA NOVA do MESMO prato/produto, tirada de outra posição de câmera: ${ANGULOS[angulo].descricao}.\n` +
+        "A imagem final NÃO pode ser cópia, recorte ou ampliação simples da foto anexada: o ponto de vista, a perspectiva, o enquadramento e a profundidade de campo devem ser claramente diferentes dela. " +
+        "Mantenha a identidade do prato: mesmos ingredientes, mesma disposição, mesmas cores, texturas, louça/embalagem e rótulos — como se o fotógrafo tivesse girado a câmera em volta do mesmo prato, no mesmo instante. Reconstrua com realismo as partes que passam a ficar visíveis ou escondidas nessa nova perspectiva, com iluminação e reflexos coerentes. Não adicione, remova nem troque ingredientes."
     );
   } else if (modo === "editar") {
     linhas.push(
@@ -149,11 +214,17 @@ export function montarPrompt(opts: {
     linhas.push("Crie uma imagem de alta qualidade para redes sociais (Instagram).");
   }
 
-  linhas.push(`Pedido: ${pedido.trim()}`);
+  if (pedido.trim()) linhas.push(modo === "angulo" ? `Observações do cliente: ${pedido.trim()}` : `Pedido: ${pedido.trim()}`);
 
-  if (qtdReferencias > 0 && modo !== "produto" && modo !== "editar") {
+  if (qtdReferencias > 0 && modo !== "produto" && modo !== "editar" && modo !== "angulo") {
     linhas.push(
-      `Há ${qtdReferencias} imagem(ns) de referência anexada(s): use-as como referência visual (estilo, produto, pessoa, objeto, composição) conforme o pedido, mantendo fidelidade ao que aparece nelas.`
+      `Há ${qtdReferencias} imagem(ns) de referência anexada(s): use-as como referência visual (estilo, produto, pessoa, objeto, composição) conforme o pedido, mantendo fidelidade ao que aparece nelas. Mas a imagem final deve ser uma criação NOVA que cumpra o pedido — nunca devolva a referência igual ou apenas recortada.`
+    );
+  }
+
+  if (opts.reforcoAnticopia) {
+    linhas.push(
+      "ATENÇÃO: a tentativa anterior devolveu a imagem de referência praticamente idêntica, o que é inaceitável. Gere uma imagem NOVA, com ponto de vista de câmera, enquadramento e perspectiva radicalmente diferentes da referência, mantendo apenas a identidade do objeto/prato."
     );
   }
 

@@ -32,6 +32,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     "Descreva: cena/assunto, composição e enquadramento, iluminação, paleta de cores, estilo (fotografia publicitária, ilustração, 3D...), clima e profundidade. Seja concreto e visual.",
     "NÃO invente textos para aparecer na imagem (o texto exato é tratado à parte). NÃO mencione logotipo. NÃO use frases como 'imagem de' ou 'gere'. Responda SOMENTE com o briefing.",
     `Tipo de trabalho: ${MODOS[modo]}. Formato: ${FORMATOS[formato].rotulo}.`,
+    modo === "angulo" ? "Trabalho: nova fotografia do MESMO prato por outro ângulo. Descreva posição de câmera, lente, profundidade de campo, luz e fundo, mantendo o prato idêntico ao da referência." : "",
     temReferencia ? "O usuário anexou imagem(ns) de referência: diga que o produto/elemento da referência deve ser mantido fiel." : "",
     textoExato
       ? `A arte terá este texto: "${textoExato}". NÃO o reescreva no briefing; descreva em detalhe o tratamento de lettering (família/estilo da fonte, peso, cor, efeito, tamanho relativo, posição e como se integra à luz e à cena) seguindo esta direção: ${ESTILOS_LETTERING[estilo].descricao}`
