@@ -35,11 +35,23 @@ export async function enviarMidiaDireto(
     );
   }
 
-  const res = await fetch("/api/uploads/signed-url", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ bucket, pasta, fileName: file.name }),
-  });
+  // Limites de tempo: antes, se qualquer uma dessas etapas pendurasse, a
+  // tela ficava em "Enviando mídia…" sem nunca dar erro nem terminar.
+  const controle = new AbortController();
+  const timer = setTimeout(() => controle.abort(), 30_000);
+  let res: Response;
+  try {
+    res = await fetch("/api/uploads/signed-url", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ bucket, pasta, fileName: file.name }),
+      signal: controle.signal,
+    });
+  } catch {
+    throw new Error("Não consegui falar com o servidor pra preparar o envio. Verifique a internet e tente de novo.");
+  } finally {
+    clearTimeout(timer);
+  }
 
   const json = await res.json().catch(() => null);
   if (!res.ok || !json?.signedUrl) {
@@ -47,7 +59,13 @@ export async function enviarMidiaDireto(
   }
 
   const supabase = createSupabaseBrowserClient();
-  const { error } = await supabase.storage.from(bucket).uploadToSignedUrl(json.path, json.token, file);
+  const envio = supabase.storage.from(bucket).uploadToSignedUrl(json.path, json.token, file);
+  const { error } = await Promise.race([
+    envio,
+    new Promise<never>((_, rejeitar) =>
+      setTimeout(() => rejeitar(new Error("O envio do arquivo demorou demais. Verifique a internet e tente de novo.")), 5 * 60_000)
+    ),
+  ]);
 
   if (error) {
     throw new Error(`Falha ao enviar o arquivo: ${error.message}`);

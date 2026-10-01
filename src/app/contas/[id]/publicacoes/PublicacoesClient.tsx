@@ -210,8 +210,9 @@ function ComporPost({
       // apagado do Storage após a publicação — ver /api/cron/publicar-feed).
       const midias: { url: string; path: string; mediaType: string; thumbnailDataUrl: string | null }[] = [];
       for (let i = 0; i < files.length; i++) {
-        setProgresso(files.length > 1 ? `Enviando arquivo ${i + 1} de ${files.length}…` : "Enviando mídia…");
+        setProgresso(files.length > 1 ? `Preparando arquivo ${i + 1} de ${files.length}…` : "Preparando mídia…");
         const arquivoFinal = await prepararImagem(files[i]);
+        setProgresso(files.length > 1 ? `Enviando arquivo ${i + 1} de ${files.length}…` : "Enviando mídia…");
         const midia = await enviarMidiaDireto(arquivoFinal, { bucket: BUCKET, pasta: "manual" });
         const thumbnailDataUrl = await gerarThumbnail(arquivoFinal);
         midias.push({ ...midia, thumbnailDataUrl });
