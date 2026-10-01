@@ -18,7 +18,7 @@ export default async function ContasPage({
   // sair do servidor.
   const { data: contas } = await admin
     .from("accounts")
-    .select("id, name, page_id, ig_user_id, ig_username, is_active, token_obtained_at, avatar_url, avatar_atualizado_em, created_at, cross_post_facebook")
+    .select("id, name, page_id, ig_user_id, ig_username, is_active, token_obtained_at, avatar_url, avatar_atualizado_em, created_at, cross_post_facebook, cross_post_facebook_stories")
     .order("name", { ascending: true });
 
   const lista = (contas ?? []) as unknown as ContaPublica[];

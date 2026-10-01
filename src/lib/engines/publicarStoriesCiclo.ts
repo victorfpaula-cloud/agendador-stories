@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { publicarStory, MetaApiError } from "@/lib/meta";
+import { crossPostStoryFacebook } from "@/lib/crossPostStoryFacebook";
 import { enviarEmail } from "@/lib/email";
 import type { Account, StoryCicloPost } from "@/types/database";
 
@@ -97,6 +98,16 @@ export async function executarPublicarStoriesCiclo(admin: ReturnType<typeof crea
         .from("story_ciclo_posts")
         .update({ status: "success", ig_media_id: igMediaId, published_at: new Date().toISOString(), error_message: null })
         .eq("id", item.id);
+
+      // Antes de apagar a cópia abaixo: o Facebook também precisa buscar a mídia.
+      await crossPostStoryFacebook(admin, {
+        conta,
+        origem: "story_engine",
+        refId: item.id,
+        dia: item.dia,
+        mediaUrl: item.media_url,
+        mediaType: item.media_type,
+      });
 
       // Publicou com sucesso? Apaga só a CÓPIA do arquivo original (que
       // ficou reservada pra esse Story específico) — o item continua no

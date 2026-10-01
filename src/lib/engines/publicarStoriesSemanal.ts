@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { agoraEmSaoPaulo, paraMinutos } from "@/lib/days";
 import { publicarStory, MetaApiError } from "@/lib/meta";
+import { crossPostStoryFacebook } from "@/lib/crossPostStoryFacebook";
 import { enviarEmail } from "@/lib/email";
 import type { Account, ScheduleSlot } from "@/types/database";
 
@@ -91,6 +92,15 @@ export async function executarPublicarStoriesSemanal(admin: ReturnType<typeof cr
         .update({ status: "success", ig_media_id: igMediaId, error_message: null })
         .eq("slot_id", slot.id)
         .eq("scheduled_for", dataISO);
+
+      await crossPostStoryFacebook(admin, {
+        conta,
+        origem: "agendador",
+        refId: slot.id,
+        dia: dataISO,
+        mediaUrl: slot.media_url,
+        mediaType: slot.media_type,
+      });
 
       resultados.push({ slotId: slot.id, conta: conta.name, status: "success" });
     } catch (err) {

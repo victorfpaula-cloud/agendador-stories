@@ -8,9 +8,7 @@
 -- É best-effort e isolado: uma falha no Facebook nunca falha nem re-tenta a
 -- publicação no Instagram (que é a que importa de verdade) — só fica
 -- registrada em fb_cross_post_status/fb_cross_post_error pra dar pra
--- investigar depois. Não cobre Stories (a API de Stories de Página do
--- Facebook não tem suporte confiável pra publicação de terceiros hoje em
--- dia) nem carrossel com vídeo misturado com foto (ver publicarNaPagina em
+-- investigar depois. Não cobre carrossel com vídeo misturado com foto (ver publicarNaPagina em
 -- src/lib/meta.ts).
 --
 -- Já aplicado em produção em 29/09/2026 (via mcp__Supabase__apply_migration,
