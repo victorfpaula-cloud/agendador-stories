@@ -8,8 +8,10 @@ import {
   FORMATOS,
   baixarDoBucket,
   carregarMarca,
+  ehEstiloLettering,
   ehFormato,
   ehModo,
+  exigePremium,
   finalizarImagem,
   montarPrompt,
 } from "@/lib/geradorImagens";
@@ -36,13 +38,16 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   const modo = form.get("modo");
   const formato = form.get("formato");
-  const qualidade: Qualidade = form.get("qualidade") === "premium" ? "premium" : "rapido";
   const pedido = String(form.get("pedido") ?? "").trim();
   const textoExato = String(form.get("textoExato") ?? "").trim().slice(0, 600);
   const usarLogo = form.get("usarLogo") === "1";
+  const estiloBruto: unknown = form.get("estiloLettering");
+  const estiloLettering = ehEstiloLettering(estiloBruto) ? estiloBruto : "auto";
   const baseId = String(form.get("baseImagemId") ?? "");
 
   if (!ehModo(modo) || !ehFormato(formato)) return NextResponse.json({ erro: "Modo ou formato inválido." }, { status: 400 });
+  // Texto na imagem sempre vai pro Premium (o Rápido erra letras e desenha mal).
+  const qualidade: Qualidade = form.get("qualidade") === "premium" || exigePremium(modo, textoExato) ? "premium" : "rapido";
   if (pedido.length < 3) return NextResponse.json({ erro: "Descreva o que você quer na imagem." }, { status: 400 });
   if (pedido.length > 4000) return NextResponse.json({ erro: "Pedido grande demais." }, { status: 400 });
 
@@ -104,6 +109,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     nomeConta: conta.name,
     usarLogo: comLogo,
     qtdReferencias: referencias.length,
+    estiloLettering,
   });
 
   try {

@@ -35,6 +35,18 @@ const MODOS: { id: ModoId; rotulo: string; dica: string; placeholder: string }[]
   },
 ];
 
+const ESTILOS_LETTERING: { id: string; rotulo: string }[] = [
+  { id: "auto", rotulo: "Automático" },
+  { id: "elegante", rotulo: "Elegante dourado" },
+  { id: "caligrafico", rotulo: "Caligráfico" },
+  { id: "moderno", rotulo: "Moderno bold" },
+  { id: "neon", rotulo: "Neon" },
+  { id: "vintage", rotulo: "Retrô / vintage" },
+  { id: "tridimensional", rotulo: "3D" },
+  { id: "minimalista", rotulo: "Minimalista" },
+  { id: "rustico", rotulo: "Rústico artesanal" },
+];
+
 const POSICOES: { id: string; rotulo: string }[] = [
   { id: "superior-esquerdo", rotulo: "Topo · esquerda" },
   { id: "superior-centro", rotulo: "Topo · centro" },
@@ -89,6 +101,7 @@ export default function GeradorClient({
   const [qualidade, setQualidade] = useState<"rapido" | "premium">("rapido");
   const [pedido, setPedido] = useState("");
   const [textoExato, setTextoExato] = useState("");
+  const [estiloLettering, setEstiloLettering] = useState("auto");
   const [usarLogo, setUsarLogo] = useState(!!marcaInicial.logoUrl);
   const [variacoes, setVariacoes] = useState(2);
   const [refs, setRefs] = useState<Ref[]>([]);
@@ -102,7 +115,11 @@ export default function GeradorClient({
   const emEdicao = modo === "editar" && base;
   const modoInfo = MODOS.find((m) => m.id === modo);
   const ocupado = gerando.some((g) => !g.erro);
-  const maxRefs = qualidade === "premium" ? 6 : 3;
+  // Com texto na imagem o servidor sempre usa o Premium (o Rápido desenha
+  // letras mal), então a tela já mostra isso.
+  const temTexto = modo === "lettering" || textoExato.trim().length > 0;
+  const qualidadeEfetiva = temTexto ? "premium" : qualidade;
+  const maxRefs = qualidadeEfetiva === "premium" ? 6 : 3;
 
   async function adicionarRefs(lista: FileList | null) {
     if (!lista) return;
@@ -126,7 +143,7 @@ export default function GeradorClient({
       const res = await fetch(`${api}/prompt`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pedido, modo, formato, textoExato, temReferencia: refs.length > 0 }),
+        body: JSON.stringify({ pedido, modo, formato, textoExato, estiloLettering, temReferencia: refs.length > 0 }),
       });
       const json = await res.json().catch(() => null);
       if (!res.ok) throw new Error(json?.erro || "Não consegui turbinar o pedido.");
@@ -142,7 +159,8 @@ export default function GeradorClient({
     const form = new FormData();
     form.set("modo", modo);
     form.set("formato", formato);
-    form.set("qualidade", qualidade);
+    form.set("qualidade", qualidadeEfetiva);
+    form.set("estiloLettering", estiloLettering);
     form.set("pedido", pedido);
     form.set("textoExato", textoExato);
     form.set("usarLogo", usarLogo && marca.logoUrl ? "1" : "0");
@@ -313,24 +331,42 @@ export default function GeradorClient({
           </button>
         )}
 
-        {(modo === "lettering" || modo === "criar") && !emEdicao && (
-          <div className="mt-4">
-            <label className="mb-1 block text-sm font-medium text-slate-700">
-              Texto que deve aparecer na imagem <span className="font-normal text-slate-400">(opcional)</span>
-            </label>
-            <textarea
-              value={textoExato}
-              onChange={(e) => setTextoExato(e.target.value)}
-              rows={2}
-              maxLength={600}
-              placeholder={'Ex: PROMOÇÃO DE SEXTA\nChopp em dobro até 20h'}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-600 focus:outline-none"
-            />
-            <p className="mt-1 text-xs text-slate-500">
-              Vai escrito exatamente assim. Pra letras perfeitas, use a qualidade <strong>Premium</strong> e confira a grafia no resultado.
-            </p>
-          </div>
-        )}
+        <div className="mt-4">
+          <label className="mb-1 block text-sm font-medium text-slate-700">
+            Texto que deve aparecer na imagem <span className="font-normal text-slate-400">(opcional)</span>
+          </label>
+          <textarea
+            value={textoExato}
+            onChange={(e) => setTextoExato(e.target.value)}
+            rows={2}
+            maxLength={600}
+            placeholder={emEdicao ? "Ex: Trocar o título para: Estamos Abertos" : "Ex: PROMOÇÃO DE SEXTA\nChopp em dobro até 20h"}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-600 focus:outline-none"
+          />
+          <p className="mt-1 text-xs text-slate-500">
+            Vai escrito exatamente assim. Quando há texto, o app usa automaticamente a qualidade <strong>Premium</strong> (a que desenha letras bem).
+          </p>
+
+          {temTexto && (
+            <div className="mt-3">
+              <div className="mb-1 text-sm font-medium text-slate-700">Estilo do lettering</div>
+              <div className="flex flex-wrap gap-2">
+                {ESTILOS_LETTERING.map((e) => (
+                  <button
+                    key={e.id}
+                    type="button"
+                    onClick={() => setEstiloLettering(e.id)}
+                    className={`rounded-full px-3 py-1.5 text-xs transition ${
+                      estiloLettering === e.id ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    {e.rotulo}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
 
         {!emEdicao && (
           <div className="mt-4">
@@ -382,9 +418,10 @@ export default function GeradorClient({
                 <button
                   key={q}
                   type="button"
+                  disabled={temTexto && q === "rapido"}
                   onClick={() => setQualidade(q)}
-                  className={`flex-1 rounded-lg px-3 py-2 text-sm ring-1 transition ${
-                    qualidade === q ? "bg-brand-600 text-white ring-brand-600" : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50"
+                  className={`flex-1 rounded-lg px-3 py-2 text-sm ring-1 transition disabled:opacity-40 ${
+                    qualidadeEfetiva === q ? "bg-brand-600 text-white ring-brand-600" : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50"
                   }`}
                 >
                   {q === "rapido" ? "Rápido" : "Premium"}
@@ -392,7 +429,7 @@ export default function GeradorClient({
               ))}
             </div>
             <p className="mt-1 text-xs text-slate-500">
-              {qualidade === "rapido" ? "Mais veloz e barato. Bom pra testar ideias." : "Melhor texto, detalhes e fidelidade. Demora mais."}
+              {qualidadeEfetiva === "rapido" ? "Mais veloz e barato. Bom pra testar ideias." : "Melhor texto, detalhes e fidelidade. Demora mais."}
             </p>
           </div>
 
