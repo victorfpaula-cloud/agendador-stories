@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { GeminiErro, escreverTexto } from "@/lib/gemini";
-import { FORMATOS, MODOS, carregarMarca, ehFormato, ehModo } from "@/lib/geradorImagens";
+import { ESTILOS_LETTERING, FORMATOS, MODOS, carregarMarca, ehEstiloLettering, ehFormato, ehModo } from "@/lib/geradorImagens";
 
 export const maxDuration = 60;
 
@@ -20,6 +20,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const formatoBruto: unknown = body?.formato;
   const formato = ehFormato(formatoBruto) ? formatoBruto : "story";
   const textoExato = String(body?.textoExato ?? "").trim().slice(0, 600);
+  const estiloBruto: unknown = body?.estiloLettering;
+  const estilo = ehEstiloLettering(estiloBruto) ? estiloBruto : "auto";
   const temReferencia = body?.temReferencia === true;
 
   const marca = await carregarMarca(admin, params.id);
@@ -31,7 +33,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     "NÃO invente textos para aparecer na imagem (o texto exato é tratado à parte). NÃO mencione logotipo. NÃO use frases como 'imagem de' ou 'gere'. Responda SOMENTE com o briefing.",
     `Tipo de trabalho: ${MODOS[modo]}. Formato: ${FORMATOS[formato].rotulo}.`,
     temReferencia ? "O usuário anexou imagem(ns) de referência: diga que o produto/elemento da referência deve ser mantido fiel." : "",
-    textoExato ? `A arte terá este texto (apenas reserve espaço visual para ele, sem repeti-lo): "${textoExato}"` : "",
+    textoExato
+      ? `A arte terá este texto: "${textoExato}". NÃO o reescreva no briefing; descreva em detalhe o tratamento de lettering (família/estilo da fonte, peso, cor, efeito, tamanho relativo, posição e como se integra à luz e à cena) seguindo esta direção: ${ESTILOS_LETTERING[estilo].descricao}`
+      : "",
     marca?.estilo.trim() ? `Identidade da marca ${conta.name}: ${marca.estilo.trim()}` : "",
   ]
     .filter(Boolean)

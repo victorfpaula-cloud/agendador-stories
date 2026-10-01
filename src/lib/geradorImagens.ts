@@ -19,6 +19,66 @@ export const MODOS = {
 } as const;
 export type ModoId = keyof typeof MODOS;
 
+// Direção tipográfica por estilo. Sem isso o modelo cai numa fonte genérica com
+// contorno (o que aconteceu no primeiro teste) — aqui o pedido de lettering
+// vira uma direção de arte de designer.
+export const ESTILOS_LETTERING = {
+  auto: {
+    rotulo: "Automático",
+    descricao: "Escolha a tipografia e o tratamento mais sofisticados e adequados ao tema, como um designer sênior de identidade visual faria.",
+  },
+  elegante: {
+    rotulo: "Elegante dourado",
+    descricao:
+      "Lettering elegante e sofisticado: serifada de alto contraste (estilo Didone/Playfair), maiúsculas com espaçamento generoso entre letras (tracking amplo), acabamento em dourado metálico fosco com brilho sutil e fino, sem contorno.",
+  },
+  caligrafico: {
+    rotulo: "Caligráfico",
+    descricao:
+      "Lettering caligráfico em script fluido e artesanal (pincel ou ponta fina), com traços de espessura variável e floreios discretos, combinado com uma sans-serif pequena, em maiúsculas espaçadas, como texto de apoio.",
+  },
+  moderno: {
+    rotulo: "Moderno bold",
+    descricao:
+      "Tipografia moderna e ousada: sans-serif geométrica ou condensada em negrito, maiúsculas, hierarquia forte entre título grande e subtítulo pequeno, alinhamento limpo, cor sólida de alto contraste.",
+  },
+  neon: {
+    rotulo: "Neon",
+    descricao:
+      "Letreiro de neon realista: tubos luminosos com brilho (glow) suave, reflexo na superfície próxima e leve halo de luz, em cores vibrantes sobre área escura.",
+  },
+  vintage: {
+    rotulo: "Retrô / vintage",
+    descricao:
+      "Lettering retrô de cartaz ou rótulo antigo: slab serif ou letras de pintor de letreiros (sign painter), leve textura de impressão, paleta quente e levemente desbotada, com filetes e pequenos ornamentos.",
+  },
+  tridimensional: {
+    rotulo: "3D",
+    descricao:
+      "Letras 3D volumétricas com profundidade, chanfro e iluminação realista, parecendo objetos físicos integrados à cena, com sombra de contato correta.",
+  },
+  minimalista: {
+    rotulo: "Minimalista",
+    descricao:
+      "Tipografia minimalista e refinada: fonte leve e fina, bastante respiro, texto pequeno e precisamente posicionado, cor sutil, estética de revista de luxo.",
+  },
+  rustico: {
+    rotulo: "Rústico artesanal",
+    descricao:
+      "Lettering rústico artesanal: manuscrito de giz em lousa, letras de madeira ou ferro forjado, aspecto autêntico e acolhedor de bar/restaurante.",
+  },
+} as const;
+export type EstiloLetteringId = keyof typeof ESTILOS_LETTERING;
+export function ehEstiloLettering(v: unknown): v is EstiloLetteringId {
+  return typeof v === "string" && v in ESTILOS_LETTERING;
+}
+
+// Quando há texto na imagem, o modelo Rápido erra letras e desenha mal —
+// força o Premium (Nano Banana Pro), que é o bom em tipografia.
+export function exigePremium(modo: ModoId, textoExato: string): boolean {
+  return modo === "lettering" || textoExato.trim().length > 0;
+}
+
 export const POSICOES_LOGO = [
   "superior-esquerdo",
   "superior-centro",
@@ -67,8 +127,9 @@ export function montarPrompt(opts: {
   nomeConta: string;
   usarLogo: boolean;
   qtdReferencias: number;
+  estiloLettering: EstiloLetteringId;
 }): string {
-  const { modo, formato, pedido, textoExato, marca, usarLogo, qtdReferencias } = opts;
+  const { modo, formato, pedido, textoExato, marca, usarLogo, qtdReferencias, estiloLettering } = opts;
   const f = FORMATOS[formato];
   const linhas: string[] = [];
 
@@ -98,8 +159,16 @@ export function montarPrompt(opts: {
 
   const texto = textoExato.trim();
   if (texto) {
+    const direcao =
+      modo === "editar" && estiloLettering === "auto"
+        ? "Mantenha o estilo de lettering já existente na imagem, só corrigindo/alterando o texto conforme pedido."
+        : ESTILOS_LETTERING[estiloLettering].descricao;
     linhas.push(
       `TEXTO NA IMAGEM — escreva exatamente o texto abaixo, letra por letra, em português, com acentos e pontuação corretos, sem erros de grafia e sem adicionar nenhum outro texto:\n"""\n${texto}\n"""`
+    );
+    linhas.push(
+      `DIREÇÃO DE LETTERING: ${direcao}\n` +
+        "Trate o texto como o elemento principal de um cartaz publicitário profissional feito por um designer gráfico premiado: hierarquia tipográfica clara (se houver mais de uma linha, título maior e complemento menor), kerning e espaçamento entrelinhas refinados, ótima legibilidade e contraste sobre o fundo (posicione o texto numa área calma da imagem; se precisar, use um degradê ou escurecimento sutil localizado atrás), margens seguras. Integre o texto à cena com iluminação, sombras e profundidade coerentes. PROIBIDO: contorno grosso, sombra pesada, efeito WordArt, fonte padrão de editor de texto, letras achatadas coladas por cima, texto torto ou cortado."
     );
   } else {
     linhas.push("Não escreva nenhum texto, letra, número ou legenda na imagem, a menos que o pedido peça.");
