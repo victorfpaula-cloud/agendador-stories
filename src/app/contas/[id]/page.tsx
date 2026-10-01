@@ -7,6 +7,7 @@ import WeekEditor from "./WeekEditor";
 import DuplicarRotina from "./DuplicarRotina";
 import ContaTabs from "./ContaTabs";
 import GerarRelatorio from "./GerarRelatorio";
+import ChaveFacebook from "./ChaveFacebook";
 
 export const dynamic = "force-dynamic";
 
@@ -133,6 +134,16 @@ export default async function ContaPage({ params }: { params: { id: string } }) 
       </div>
 
       <ContaTabs accountId={(conta as Account).id} />
+
+      <div className="mb-6">
+        <ChaveFacebook
+          accountId={(conta as Account).id}
+          campo="cross_post_facebook_stories"
+          titulo="Stories também no Facebook"
+          descricao="Todo Story publicado por aqui (Agendador, Story Engine e AutoStory) também sai como Story na Página do Facebook vinculada."
+          valorInicial={(conta as Account).cross_post_facebook_stories}
+        />
+      </div>
 
       <WeekEditor
         accountId={(conta as Account).id}

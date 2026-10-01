@@ -11,13 +11,14 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const { id } = params;
 
   const body = await req.json().catch(() => ({}));
-  const patch: { is_active?: boolean; cross_post_facebook?: boolean } = {};
+  const patch: { is_active?: boolean; cross_post_facebook?: boolean; cross_post_facebook_stories?: boolean } = {};
   if (typeof body.is_active === "boolean") patch.is_active = body.is_active;
   if (typeof body.cross_post_facebook === "boolean") patch.cross_post_facebook = body.cross_post_facebook;
+  if (typeof body.cross_post_facebook_stories === "boolean") patch.cross_post_facebook_stories = body.cross_post_facebook_stories;
 
   if (Object.keys(patch).length === 0) {
     return NextResponse.json(
-      { erro: "Nenhum campo válido pra atualizar (is_active ou cross_post_facebook)." },
+      { erro: "Nenhum campo válido pra atualizar (is_active, cross_post_facebook ou cross_post_facebook_stories)." },
       { status: 400 }
     );
   }
@@ -26,7 +27,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     .from("accounts")
     .update(patch)
     .eq("id", id)
-    .select("id, name, page_id, ig_user_id, ig_username, is_active, token_obtained_at, avatar_url, avatar_atualizado_em, created_at, cross_post_facebook")
+    .select("id, name, page_id, ig_user_id, ig_username, is_active, token_obtained_at, avatar_url, avatar_atualizado_em, created_at, cross_post_facebook, cross_post_facebook_stories")
     .maybeSingle();
 
   if (error) {

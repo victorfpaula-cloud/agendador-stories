@@ -17,6 +17,9 @@ export interface Account {
   // Cross-post automático pro Feed da Página do Facebook — ver
   // supabase/cross-post-facebook.sql.
   cross_post_facebook: boolean;
+  // Também publica os Stories (3 motores) como Story na Página do Facebook
+  // — ver supabase/cross-post-facebook-stories.sql.
+  cross_post_facebook_stories: boolean;
 }
 
 export interface ScheduleSlot {

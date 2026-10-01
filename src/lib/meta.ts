@@ -407,4 +407,48 @@ export async function publicarCrossPostNaPagina({
   return publicarFotoNaPagina(pageId, pageAccessToken, itens[0].mediaUrl, caption);
 }
 
+// ---------- Cross-post dos Stories pra Página do Facebook ----------
+// API de Stories de Página da Meta (photo_stories / video_stories), usada só
+// depois do Story do Instagram já ter saído. Foto: sobe a imagem sem publicar
+// e transforma em Story. Vídeo: 3 fases (start, upload por URL, finish).
+
+interface StoryNaPaginaParams {
+  pageId: string;
+  pageAccessToken: string;
+  mediaUrl: string;
+  mediaType: "IMAGE" | "VIDEO";
+}
+
+export async function publicarStoryNaPagina({ pageId, pageAccessToken, mediaUrl, mediaType }: StoryNaPaginaParams): Promise<string> {
+  if (mediaType === "IMAGE") {
+    const foto = await graphFetch(
+      `/${pageId}/photos`,
+      { url: mediaUrl, published: "false", access_token: pageAccessToken },
+      "POST"
+    );
+    const story = await graphFetch(`/${pageId}/photo_stories`, { photo_id: foto.id as string, access_token: pageAccessToken }, "POST");
+    return (story.post_id as string | undefined) ?? (foto.id as string);
+  }
+
+  const inicio = await graphFetch(`/${pageId}/video_stories`, { upload_phase: "start", access_token: pageAccessToken }, "POST");
+  const videoId = inicio.video_id as string;
+
+  const envio = await fetch(inicio.upload_url as string, {
+    method: "POST",
+    headers: { Authorization: `OAuth ${pageAccessToken}`, file_url: mediaUrl },
+    cache: "no-store",
+  });
+  const envioJson = await envio.json().catch(() => null);
+  if (!envio.ok || envioJson?.success === false) {
+    throw new MetaApiError(envioJson?.debug_info?.message || envioJson?.error?.message || `Falha no envio do vídeo pro Facebook (HTTP ${envio.status})`, envioJson);
+  }
+
+  const fim = await graphFetch(
+    `/${pageId}/video_stories`,
+    { video_id: videoId, upload_phase: "finish", access_token: pageAccessToken },
+    "POST"
+  );
+  return (fim.post_id as string | undefined) ?? videoId;
+}
+
 export { MetaApiError };

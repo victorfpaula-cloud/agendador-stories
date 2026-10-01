@@ -1,5 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { publicarStory, MetaApiError } from "@/lib/meta";
+import { crossPostStoryFacebook } from "@/lib/crossPostStoryFacebook";
+import { agoraEmSaoPaulo } from "@/lib/days";
 import { enviarEmail } from "@/lib/email";
 import type { Account, StoryPost } from "@/types/database";
 
@@ -110,6 +112,16 @@ export async function executarPublicarStoriesDrive(admin: ReturnType<typeof crea
         .from("story_posts")
         .update({ status: "success", ig_media_id: igMediaId, published_at: new Date().toISOString(), error_message: null })
         .eq("id", item.id);
+
+      // Antes de apagar o arquivo abaixo: o Facebook também precisa buscar a mídia.
+      await crossPostStoryFacebook(admin, {
+        conta,
+        origem: "autostory",
+        refId: item.id,
+        dia: item.dia ?? agoraEmSaoPaulo().dataISO,
+        mediaUrl: item.media_url,
+        mediaType: item.media_type,
+      });
 
       // Publicou com sucesso? O Instagram já buscou a mídia — a miniatura
       // (baixada do próprio Drive na hora da ingestão) continua
