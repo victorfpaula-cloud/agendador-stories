@@ -1,4 +1,5 @@
 import sharp from "sharp";
+import { renderizarTexto, type OpcoesTexto, type PosicaoTexto } from "./tipografia";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const BUCKET_GERADOR = "gerador-imagens";
@@ -26,47 +27,48 @@ export type ModoId = keyof typeof MODOS;
 export const ESTILOS_LETTERING = {
   auto: {
     rotulo: "Automático",
-    descricao: "Escolha a tipografia e o tratamento mais sofisticados e adequados ao tema, como um designer sênior de identidade visual faria.",
+    descricao:
+      "Choose the most sophisticated, on-brand typographic treatment for this subject, the way a senior brand designer would: one expressive display typeface for the headline paired with one small, widely tracked supporting sans-serif.",
   },
   elegante: {
     rotulo: "Elegante dourado",
     descricao:
-      "Lettering elegante e sofisticado: serifada de alto contraste (estilo Didone/Playfair), maiúsculas com espaçamento generoso entre letras (tracking amplo), acabamento em dourado metálico fosco com brilho sutil e fino, sem contorno.",
+      "High-contrast Didone serif (Bodoni / Playfair Display feel) with hairline serifs and thick stems, ALL CAPS, wide letter-spacing, finished in brushed gold-leaf foil with soft specular highlights and a subtle emboss; the supporting line in a thin, spaced-out sans-serif; a hairline gold divider between them.",
   },
   caligrafico: {
     rotulo: "Caligráfico",
     descricao:
-      "Lettering caligráfico em script fluido e artesanal (pincel ou ponta fina), com traços de espessura variável e floreios discretos, combinado com uma sans-serif pequena, em maiúsculas espaçadas, como texto de apoio.",
+      "Hand-lettered brush-pen calligraphy script with fluid connected strokes, natural thick-thin stroke contrast and a few restrained flourishes, in warm cream ink; paired with a tiny, widely tracked uppercase sans-serif for the secondary line.",
   },
   moderno: {
     rotulo: "Moderno bold",
     descricao:
-      "Tipografia moderna e ousada: sans-serif geométrica ou condensada em negrito, maiúsculas, hierarquia forte entre título grande e subtítulo pequeno, alinhamento limpo, cor sólida de alto contraste.",
+      "Bold modern poster typography: ultra-condensed heavy grotesque sans-serif (Anton / Bebas Neue feel), ALL CAPS, tight leading, strong scale contrast between the huge headline and a small tracked subtitle in one accent color; flat solid color, razor-clean edges.",
   },
   neon: {
     rotulo: "Neon",
     descricao:
-      "Letreiro de neon realista: tubos luminosos com brilho (glow) suave, reflexo na superfície próxima e leve halo de luz, em cores vibrantes sobre área escura.",
+      "Realistic glass-tube neon sign lettering in a monoline script, with a warm inner glow, a soft halo bleeding onto nearby surfaces, small tube mounts, and reflections on the surface below.",
   },
   vintage: {
     rotulo: "Retrô / vintage",
     descricao:
-      "Lettering retrô de cartaz ou rótulo antigo: slab serif ou letras de pintor de letreiros (sign painter), leve textura de impressão, paleta quente e levemente desbotada, com filetes e pequenos ornamentos.",
+      "Retro vintage poster lettering: fat-face or slab serif in sign-painter style, cream white with a hard offset drop shadow in deep red, subtle printed-paper grain and slight ink wear; thin double rules and small ornaments.",
   },
   tridimensional: {
     rotulo: "3D",
     descricao:
-      "Letras 3D volumétricas com profundidade, chanfro e iluminação realista, parecendo objetos físicos integrados à cena, com sombra de contato correta.",
+      "Chunky 3D lettering that looks like a real physical object (glossy inflated, carved or ceramic), with bevels, true volume, contact shadows and reflections matching the scene's light.",
   },
   minimalista: {
     rotulo: "Minimalista",
     descricao:
-      "Tipografia minimalista e refinada: fonte leve e fina, bastante respiro, texto pequeno e precisamente posicionado, cor sutil, estética de revista de luxo.",
+      "Refined editorial minimalism: ultra-light high-contrast serif (Cormorant feel) in widely tracked capitals, a tiny supporting sans-serif line, generous negative space, a single calm color.",
   },
   rustico: {
     rotulo: "Rústico artesanal",
     descricao:
-      "Lettering rústico artesanal: manuscrito de giz em lousa, letras de madeira ou ferro forjado, aspecto autêntico e acolhedor de bar/restaurante.",
+      "Authentic rustic lettering: chalk hand-lettering on a blackboard, or branded wood / forged-iron letters, slight irregularity, dusty texture, warm tavern feel.",
   },
 } as const;
 export type EstiloLetteringId = keyof typeof ESTILOS_LETTERING;
@@ -105,17 +107,16 @@ export function ehAngulo(v: unknown): v is AnguloId {
   return typeof v === "string" && v in ANGULOS;
 }
 
-// Quando há texto na imagem, o modelo Rápido erra letras e desenha mal —
+// Quando a IA desenha o texto, o modelo Rápido erra letras e desenha mal —
 // força o Premium (Nano Banana Pro), que é o bom em tipografia.
 // O mesmo vale pra qualquer trabalho com imagem de referência (produto,
 // ângulo, estilo): o Premium segue instruções e mantém a identidade do
 // objeto bem melhor.
-export function exigePremium(modo: ModoId, textoExato: string, temReferencia: boolean): boolean {
+export function exigePremium(modo: ModoId, textoNaIA: boolean, temReferencia: boolean): boolean {
   return (
-    modo === "lettering" ||
     modo === "produto" ||
     modo === "angulo" ||
-    textoExato.trim().length > 0 ||
+    textoNaIA ||
     (temReferencia && modo !== "editar")
   );
 }
@@ -186,6 +187,10 @@ export function montarPrompt(opts: {
   estiloLettering: EstiloLetteringId;
   angulo?: AnguloId;
   reforcoAnticopia?: boolean;
+  // "camada": o texto NÃO é desenhado pela IA — o app escreve depois com
+  // fontes de verdade (src/lib/tipografia.ts); a IA só reserva o espaço.
+  textoNaCamada?: boolean;
+  posicaoTexto?: PosicaoTexto;
 }): string {
   const { modo, formato, pedido, textoExato, marca, usarLogo, qtdReferencias, estiloLettering } = opts;
   const angulo = opts.angulo ?? "livre";
@@ -206,6 +211,8 @@ export function montarPrompt(opts: {
     linhas.push(
       "A primeira imagem anexada é a imagem a ser editada. Aplique SOMENTE a alteração pedida abaixo e mantenha todo o resto idêntico (composição, cores, textos, rostos, objetos, estilo)."
     );
+  } else if (modo === "lettering" && opts.textoNaCamada) {
+    linhas.push("Crie a arte visual de fundo (cenário, objetos, luz) para uma arte de rede social. O texto será aplicado depois por fora.");
   } else if (modo === "lettering") {
     linhas.push(
       "Crie uma arte gráfica de redes sociais com tipografia/lettering de alto nível: hierarquia visual clara, texto grande, legível e bem integrado ao design."
@@ -229,17 +236,30 @@ export function montarPrompt(opts: {
   }
 
   const texto = textoExato.trim();
-  if (texto) {
+  if (texto && opts.textoNaCamada) {
+    const faixa = opts.posicaoTexto === "topo" ? "do TOPO" : opts.posicaoTexto === "baixo" ? "do terço INFERIOR" : "do CENTRO";
+    linhas.push(
+      `Não escreva NENHUM texto, letra, número ou símbolo na imagem. Deixe livre, calma e sem elementos importantes a faixa ${faixa} do quadro (cerca de 30% da altura): um título será aplicado ali depois, por fora. Componha o assunto principal fora dessa faixa, com uma área de fundo limpa e de tonalidade uniforme nela.`
+    );
+  } else if (texto) {
     const direcao =
       modo === "editar" && estiloLettering === "auto"
-        ? "Mantenha o estilo de lettering já existente na imagem, só corrigindo/alterando o texto conforme pedido."
+        ? "Keep the lettering style already present in the image; only correct/change the text as requested."
         : ESTILOS_LETTERING[estiloLettering].descricao;
     linhas.push(
-      `TEXTO NA IMAGEM — escreva exatamente o texto abaixo, letra por letra, em português, com acentos e pontuação corretos, sem erros de grafia e sem adicionar nenhum outro texto:\n"""\n${texto}\n"""`
-    );
-    linhas.push(
-      `DIREÇÃO DE LETTERING: ${direcao}\n` +
-        "Trate o texto como o elemento principal de um cartaz publicitário profissional feito por um designer gráfico premiado: hierarquia tipográfica clara (se houver mais de uma linha, título maior e complemento menor), kerning e espaçamento entrelinhas refinados, ótima legibilidade e contraste sobre o fundo (posicione o texto numa área calma da imagem; se precisar, use um degradê ou escurecimento sutil localizado atrás), margens seguras. Integre o texto à cena com iluminação, sombras e profundidade coerentes. PROIBIDO: contorno grosso, sombra pesada, efeito WordArt, fonte padrão de editor de texto, letras achatadas coladas por cima, texto torto ou cortado."
+      [
+        "=== TYPOGRAPHY BRIEF — this lettering is the hero of the design ===",
+        'Text to render, in Brazilian Portuguese. Reproduce it EXACTLY, character by character, keeping every accent (ã, õ, é, ê, ç, ...) and all punctuation. Do not translate, abbreviate, add or omit any word:',
+        `"""\n${texto}\n"""`,
+        `Lettering style: ${direcao}`,
+        "Craft rules:",
+        "- If there are several lines: the first line is the headline (largest); the following lines are secondary (about 25–35% of the headline size) with a clear hierarchy.",
+        "- Use at most two typefaces. Optical kerning, balanced leading, comfortable margins (at least 8% from every edge).",
+        "- Razor sharp and fully legible at phone size: strong value contrast against the background; place the text over a calm area of the image, or add a soft localized darkening behind it.",
+        "- Integrate the lettering with the scene: same light direction, color temperature, depth of field and perspective (cast shadows, reflections, material interaction).",
+        "- Before finishing, re-read each word of the supplied text and fix any misspelled or malformed letter.",
+        "- FORBIDDEN: thick outline/stroke around the letters, heavy generic drop shadow, WordArt or preset gradients, default system fonts, flat stickers pasted on top, extra words, watermarks, gibberish text.",
+      ].join("\n")
     );
   } else {
     linhas.push("Não escreva nenhum texto, letra, número ou legenda na imagem, a menos que o pedido peça.");
@@ -265,18 +285,36 @@ export function montarPrompt(opts: {
   return linhas.join("\n\n");
 }
 
-// Redimensiona pro tamanho final do formato e, se pedido, COLA o logo por
-// cima. O logo nunca passa pelo modelo: é o arquivo original enviado pelo
-// Victor, só escalado proporcionalmente pro tamanho escolhido (sem corte,
-// sem filtro, sem recolorir). Mantém o metadado que o sharp consegue manter
-// (nada é removido de propósito).
-export async function finalizarImagem(
-  bruta: Buffer,
+// Redimensiona pro tamanho final do formato (a "base": arte da IA, sem texto
+// e sem logo). Mantém o metadado que o sharp consegue manter (nada é
+// removido de propósito).
+export async function prepararBase(bruta: Buffer, formato: FormatoId): Promise<Buffer> {
+  const f = FORMATOS[formato];
+  return sharp(bruta)
+    .keepMetadata()
+    .resize(f.largura, f.altura, { fit: "cover", position: "centre" })
+    .jpeg({ quality: 95, chromaSubsampling: "4:4:4" })
+    .toBuffer();
+}
+
+export type LogoParaColar = { buffer: Buffer; posicao: PosicaoLogo; tamanhoPct: number; margemPct: number };
+
+// Monta a imagem final sobre a base: (1) texto com fontes de verdade, se
+// houver; (2) o logo COLADO por cima. O logo nunca passa pelo modelo: é o
+// arquivo original enviado pelo Victor, só escalado proporcionalmente pro
+// tamanho escolhido (sem corte, sem filtro, sem recolorir).
+export async function comporFinal(
+  base: Buffer,
   formato: FormatoId,
-  logo: { buffer: Buffer; posicao: PosicaoLogo; tamanhoPct: number; margemPct: number } | null
+  texto: OpcoesTexto | null,
+  logo: LogoParaColar | null
 ): Promise<Buffer> {
   const f = FORMATOS[formato];
-  let pipeline = sharp(bruta).keepMetadata().resize(f.largura, f.altura, { fit: "cover", position: "centre" });
+  const camadas: { input: Buffer; top: number; left: number }[] = [];
+
+  if (texto && texto.texto.trim()) {
+    camadas.push({ input: await renderizarTexto(f.largura, f.altura, texto), top: 0, left: 0 });
+  }
 
   if (logo) {
     const larguraAlvo = Math.max(8, Math.round((f.largura * logo.tamanhoPct) / 100));
@@ -295,12 +333,11 @@ export async function finalizarImagem(
     const left =
       hz === "esquerdo" ? margem : hz === "direito" ? f.largura - w - margem : Math.round((f.largura - w) / 2);
 
-    // Resolve o resize antes pra compor sobre os pixels já no tamanho final.
-    const base = await pipeline.png().toBuffer();
-    pipeline = sharp(base).keepMetadata().composite([{ input: logoRedim.data, top: Math.max(0, top), left: Math.max(0, left) }]);
+    camadas.push({ input: logoRedim.data, top: Math.max(0, top), left: Math.max(0, left) });
   }
 
-  return pipeline.jpeg({ quality: 95, chromaSubsampling: "4:4:4" }).toBuffer();
+  if (camadas.length === 0) return base;
+  return sharp(base).keepMetadata().composite(camadas).jpeg({ quality: 95, chromaSubsampling: "4:4:4" }).toBuffer();
 }
 
 export async function carregarMarca(admin: SupabaseClient, accountId: string): Promise<MarcaConfig | null> {

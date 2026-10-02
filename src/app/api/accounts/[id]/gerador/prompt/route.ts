@@ -22,20 +22,24 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const textoExato = String(body?.textoExato ?? "").trim().slice(0, 600);
   const estiloBruto: unknown = body?.estiloLettering;
   const estilo = ehEstiloLettering(estiloBruto) ? estiloBruto : "auto";
+  const textoNaCamada = body?.textoModo !== "ia" && modo !== "editar";
   const temReferencia = body?.temReferencia === true;
 
   const marca = await carregarMarca(admin, params.id);
 
   const sistema = [
-    "Você é diretor de arte de um social media brasileiro e escreve briefings para um gerador de imagens (Nano Banana).",
-    "Transforme a ideia do usuário em UM briefing de imagem detalhado, em português do Brasil, entre 60 e 130 palavras, em texto corrido (sem listas, sem títulos).",
-    "Descreva: cena/assunto, composição e enquadramento, iluminação, paleta de cores, estilo (fotografia publicitária, ilustração, 3D...), clima e profundidade. Seja concreto e visual.",
-    "NÃO invente textos para aparecer na imagem (o texto exato é tratado à parte). NÃO mencione logotipo. NÃO use frases como 'imagem de' ou 'gere'. Responda SOMENTE com o briefing.",
+    "Você é diretor de arte sênior de uma agência brasileira de publicidade e escreve briefings para um gerador de imagens de última geração (Nano Banana Pro).",
+    "Transforme a ideia do usuário em UM briefing de imagem altamente específico, em português do Brasil, entre 80 e 160 palavras, em texto corrido (sem listas, sem títulos, sem aspas).",
+    "Um bom briefing é concreto e cinematográfico. Cubra, nesta ordem: (1) assunto e ação principal; (2) cenário e props com materiais e texturas reais (madeira escura, mármore, cerâmica fosca, vapor, gotículas); (3) enquadramento e lente (ex.: 85mm f/1.8, close macro, plongée a 45°); (4) luz — direção, dureza e temperatura (ex.: luz suave de janela vinda da esquerda, contraluz quente, rim light âmbar); (5) paleta de cores e color grading; (6) profundidade de campo e clima; (7) acabamento (fotografia publicitária de revista, hiper-realista, nitidez nos detalhes).",
+    "Evite adjetivos vazios (lindo, incrível, perfeito) e clichês genéricos; prefira detalhes observáveis. NÃO mencione logotipo. NÃO use frases como 'imagem de' ou 'gere'. Responda SOMENTE com o briefing.",
     `Tipo de trabalho: ${MODOS[modo]}. Formato: ${FORMATOS[formato].rotulo}.`,
     modo === "angulo" ? "Trabalho: nova fotografia do MESMO prato por outro ângulo. Descreva posição de câmera, lente, profundidade de campo, luz e fundo, mantendo o prato idêntico ao da referência." : "",
     temReferencia ? "O usuário anexou imagem(ns) de referência: diga que o produto/elemento da referência deve ser mantido fiel." : "",
-    textoExato
-      ? `A arte terá este texto: "${textoExato}". NÃO o reescreva no briefing; descreva em detalhe o tratamento de lettering (família/estilo da fonte, peso, cor, efeito, tamanho relativo, posição e como se integra à luz e à cena) seguindo esta direção: ${ESTILOS_LETTERING[estilo].descricao}`
+    textoExato && textoNaCamada
+      ? "O texto será aplicado depois por fora, com tipografia profissional: NÃO descreva nenhum texto nem letras. Em vez disso, descreva uma faixa calma, limpa e de tonalidade uniforme da composição onde um título vai entrar, e componha o assunto principal fora dela."
+      : "",
+    textoExato && !textoNaCamada
+      ? `A arte terá este texto: "${textoExato}". NÃO o reescreva no briefing; descreva em detalhe o tratamento de lettering — família/estilo da fonte (ex.: serifada Didone de alto contraste, script de pincel, sans condensada pesada), peso, caixa, espaçamento entre letras, cor/material/acabamento (folha de ouro, neon de vidro, giz), tamanho relativo entre título e subtítulo, posição e como as letras recebem a luz e as sombras da cena — seguindo esta direção: ${ESTILOS_LETTERING[estilo].descricao}`
       : "",
     marca?.estilo.trim() ? `Identidade da marca ${conta.name}: ${marca.estilo.trim()}` : "",
   ]
