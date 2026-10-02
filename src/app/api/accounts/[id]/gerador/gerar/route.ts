@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { agoraEmSaoPaulo } from "@/lib/days";
 import { ehPosicaoTexto, ehTemaTexto, type OpcoesTexto } from "@/lib/tipografia";
+import { gerarImagemOpenAI } from "@/lib/openaiImagem";
 import { GeminiErro, gerarImagem, type Qualidade, type Referencia } from "@/lib/gemini";
 import {
   BUCKET_GERADOR,
@@ -58,6 +59,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const corBruta = String(form.get("corTexto") ?? "");
   const corTexto = /^#[0-9a-fA-F]{6}$/.test(corBruta) ? corBruta : null;
   const veuTexto = form.get("veuTexto") !== "0";
+  const motor: "gpt" | "nano" = form.get("motor") === "gpt" ? "gpt" : "nano";
   const anguloBruto: unknown = form.get("angulo");
   const angulo = ehAngulo(anguloBruto) ? anguloBruto : "livre";
   const baseId = String(form.get("baseImagemId") ?? "");
@@ -114,8 +116,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   // Texto na imagem e trabalho com referência sempre vão pro Premium (o
   // Rápido erra letras, desenha mal e tende a devolver a referência igual).
+  // No Nano Banana, texto/referência vão pro Premium (o Rápido erra letras e
+  // tende a devolver a referência igual). No GPT a qualidade é a que o
+  // Victor escolheu ("Rápido" = medium, "Premium" = high, que é bem mais lento).
   const qualidade: Qualidade =
-    form.get("qualidade") === "premium" || exigePremium(modo, textoExato.length > 0 && !textoNaCamada, referencias.length > 0) ? "premium" : "rapido";
+    form.get("qualidade") === "premium" ||
+    (motor === "nano" && exigePremium(modo, textoExato.length > 0 && !textoNaCamada, referencias.length > 0))
+      ? "premium"
+      : "rapido";
 
   const marca = await carregarMarca(admin, params.id);
   const comLogo = usarLogo && !!marca?.logo_path;
@@ -136,10 +144,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   };
   const prompt = montarPrompt(parametrosPrompt);
 
+  const gerarComMotor = motor === "gpt" ? gerarImagemOpenAI : gerarImagem;
+
   try {
     const inicio = Date.now();
     const aspecto = FORMATOS[formato].aspecto;
-    let r = await gerarImagem({ qualidade, prompt, referencias, aspecto });
+    let r = await gerarComMotor({ qualidade, prompt, referencias, aspecto });
     let aviso: string | null = null;
 
     // Trava anti-cópia: se o modelo devolveu a própria referência quase
@@ -151,7 +161,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       aviso = "A IA devolveu quase a mesma foto da referência. Use \"Refazer\" ou descreva a mudança com mais detalhe.";
       if (restante >= 15_000) {
         try {
-          const r2 = await gerarImagem({
+          const r2 = await gerarComMotor({
             qualidade,
             prompt: montarPrompt({ ...parametrosPrompt, reforcoAnticopia: true }),
             referencias,

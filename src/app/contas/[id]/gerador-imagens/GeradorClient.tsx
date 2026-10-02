@@ -113,9 +113,11 @@ export default function GeradorClient({
   nomeConta,
   marcaInicial,
   imagensIniciais,
+  motoresDisponiveis,
 }: {
   accountId: string;
   nomeConta: string;
+  motoresDisponiveis: { nano: boolean; gpt: boolean };
   marcaInicial: Marca;
   imagensIniciais: ImagemGerada[];
 }) {
@@ -125,6 +127,24 @@ export default function GeradorClient({
   const [galeria, setGaleria] = useState<ImagemGerada[]>(imagensIniciais);
   const [modo, setModo] = useState<ModoId>("criar");
   const [formato, setFormato] = useState<FormatoId>("story");
+  // Motor de imagem: Nano Banana (Google) ou GPT Image (OpenAI). A escolha fica
+  // lembrada neste aparelho.
+  const [motor, setMotorEstado] = useState<"nano" | "gpt">("nano");
+  useEffect(() => {
+    try {
+      if (window.localStorage.getItem("gerador-motor") === "gpt" && motoresDisponiveis.gpt) setMotorEstado("gpt");
+    } catch {
+      /* sem acesso ao armazenamento local — segue no padrão */
+    }
+  }, [motoresDisponiveis.gpt]);
+  function setMotor(m: "nano" | "gpt") {
+    setMotorEstado(m);
+    try {
+      window.localStorage.setItem("gerador-motor", m);
+    } catch {
+      /* ignora */
+    }
+  }
   const [qualidade, setQualidade] = useState<"rapido" | "premium">("rapido");
   const [pedido, setPedido] = useState("");
   const [textoExato, setTextoExato] = useState("");
@@ -153,7 +173,7 @@ export default function GeradorClient({
   const temTexto = modo === "lettering" || textoExato.trim().length > 0;
   // Referência também força o Premium: o Rápido tende a devolver a foto igual.
   const textoNaIA = temTexto && (textoModo === "ia" || modo === "editar");
-  const forcaPremium = textoNaIA || modo === "produto" || modo === "angulo" || (refs.length > 0 && modo !== "editar");
+  const forcaPremium = motor === "nano" && (textoNaIA || modo === "produto" || modo === "angulo" || (refs.length > 0 && modo !== "editar"));
   const qualidadeEfetiva = forcaPremium ? "premium" : qualidade;
   const maxRefs = 6;
 
@@ -196,6 +216,7 @@ export default function GeradorClient({
     form.set("modo", modo);
     form.set("formato", formato);
     form.set("qualidade", qualidadeEfetiva);
+    form.set("motor", motor);
     form.set("estiloLettering", estiloLettering);
     form.set("textoModo", textoModo);
     form.set("temaTexto", opTexto.tema);
@@ -512,6 +533,33 @@ export default function GeradorClient({
           </div>
         )}
 
+        <div className="mt-5">
+          <div className="mb-1 text-sm font-medium text-slate-700">Motor de imagem</div>
+          <div className="grid grid-cols-2 gap-2">
+            {(
+              [
+                ["nano", "Nano Banana", "Google", motoresDisponiveis.nano],
+                ["gpt", "GPT Image", "OpenAI (ChatGPT)", motoresDisponiveis.gpt],
+              ] as const
+            ).map(([id, nome, empresa, ok]) => (
+              <button
+                key={id}
+                type="button"
+                disabled={!ok}
+                onClick={() => setMotor(id)}
+                className={`rounded-lg px-3 py-2 text-left text-sm ring-1 transition disabled:opacity-50 ${
+                  motor === id ? "bg-brand-600 text-white ring-brand-600" : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50"
+                }`}
+              >
+                <div className="font-medium">{nome}</div>
+                <div className={`text-xs ${motor === id ? "text-white/80" : "text-slate-500"}`}>
+                  {ok ? empresa : "chave não configurada na Vercel"}
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
           <div>
             <div className="mb-1 text-sm font-medium text-slate-700">Qualidade</div>
@@ -531,7 +579,13 @@ export default function GeradorClient({
               ))}
             </div>
             <p className="mt-1 text-xs text-slate-500">
-              {qualidadeEfetiva === "rapido" ? "Mais veloz e barato. Bom pra testar ideias." : "Melhor texto, detalhes e fidelidade. Demora mais."}
+              {motor === "gpt"
+                ? qualidadeEfetiva === "rapido"
+                  ? "Qualidade média: mais veloz e barata."
+                  : "Qualidade alta: mais detalhe e texto melhor, mas é mais lenta e cara — pode estourar o limite de 60s."
+                : qualidadeEfetiva === "rapido"
+                  ? "Mais veloz e barato. Bom pra testar ideias."
+                  : "Melhor texto, detalhes e fidelidade. Demora mais."}
             </p>
           </div>
 

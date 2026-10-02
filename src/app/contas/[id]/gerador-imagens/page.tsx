@@ -54,6 +54,7 @@ export default async function GeradorImagensPage({ params }: { params: { id: str
           margem: m?.logo_margem_pct ?? 5,
           estilo: m?.estilo ?? "",
         }}
+        motoresDisponiveis={{ nano: !!process.env.GEMINI_API_KEY, gpt: !!process.env.OPENAI_API_KEY }}
         imagensIniciais={(imagens ?? []) as ImagemGerada[]}
       />
     </main>
