@@ -45,3 +45,7 @@ alter table public.imagens_geradas enable row level security;
 alter table public.imagens_geradas
   add column base_path text,
   add column camada jsonb;
+
+-- Custo estimado por imagem (02/10/2026) — alimenta o contador e o limite de
+-- gasto diário do Gerador. Aplicado em produção (migração "gerador_custo").
+alter table public.imagens_geradas add column custo_usd numeric not null default 0;

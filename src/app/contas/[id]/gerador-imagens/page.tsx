@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Account, GeradorMarca, ImagemGerada } from "@/types/database";
 import { BUCKET_GERADOR } from "@/lib/geradorImagens";
+import { agoraEmSaoPaulo } from "@/lib/days";
+import { custoDaLinhaUSD } from "@/lib/custosGerador";
 import ContaTabs from "../ContaTabs";
 import GeradorClient from "./GeradorClient";
 
@@ -22,6 +24,15 @@ export default async function GeradorImagensPage({ params }: { params: { id: str
     .eq("account_id", params.id)
     .order("created_at", { ascending: false })
     .limit(80);
+
+  const { dataISO } = agoraEmSaoPaulo();
+  const { data: hoje } = await admin
+    .from("imagens_geradas")
+    .select("custo_usd, modelo")
+    .gte("created_at", `${dataISO}T00:00:00-03:00`);
+  const gastoHojeUsd = (hoje ?? []).reduce((t, l) => t + custoDaLinhaUSD(l), 0);
+  const usdBrl = Number(process.env.USD_BRL) || 5.5;
+  const limiteReais = Number(process.env.GERADOR_LIMITE_DIARIO_REAIS) || 10;
 
   const m = (marca as GeradorMarca | null) ?? null;
   const logoUrl = m?.logo_path ? admin.storage.from(BUCKET_GERADOR).getPublicUrl(m.logo_path).data.publicUrl : null;
@@ -54,6 +65,9 @@ export default async function GeradorImagensPage({ params }: { params: { id: str
           margem: m?.logo_margem_pct ?? 5,
           estilo: m?.estilo ?? "",
         }}
+        gastoHojeUsd={gastoHojeUsd}
+        usdBrl={usdBrl}
+        limiteReais={limiteReais}
         motoresDisponiveis={{ nano: !!process.env.GEMINI_API_KEY, gpt: !!process.env.OPENAI_API_KEY }}
         imagensIniciais={(imagens ?? []) as ImagemGerada[]}
       />

@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { agoraEmSaoPaulo } from "@/lib/days";
 import { ehPosicaoTexto, ehTemaTexto, type OpcoesTexto } from "@/lib/tipografia";
+import { custoDaLinhaUSD, custoUSD, formatarReais } from "@/lib/custosGerador";
 import { gerarImagemOpenAI } from "@/lib/openaiImagem";
 import { GeminiErro, gerarImagem, type Qualidade, type Referencia } from "@/lib/gemini";
 import {
@@ -14,7 +15,6 @@ import {
   ehEstiloLettering,
   ehFormato,
   ehModo,
-  exigePremium,
   comporFinal,
   prepararBase,
   montarPrompt,
@@ -27,6 +27,9 @@ export const maxDuration = 60;
 
 const MIMES_OK = new Set(["image/jpeg", "image/png", "image/webp"]);
 const LIMITE_DIARIO = Number(process.env.GERADOR_LIMITE_DIARIO) || 150;
+// Teto de gasto por dia (estimado), em reais — proteção contra susto na fatura.
+const LIMITE_DIARIO_REAIS = Number(process.env.GERADOR_LIMITE_DIARIO_REAIS) || 10;
+const USD_BRL = Number(process.env.USD_BRL) || 5.5;
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const admin = createAdminClient();
@@ -70,12 +73,21 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   // Teto diário (todas as contas somadas) pra um clique maluco não virar conta alta.
   const { dataISO } = agoraEmSaoPaulo();
-  const { count } = await admin
+  const { data: hoje } = await admin
     .from("imagens_geradas")
-    .select("id", { count: "exact", head: true })
+    .select("custo_usd, modelo")
     .gte("created_at", `${dataISO}T00:00:00-03:00`);
-  if ((count ?? 0) >= LIMITE_DIARIO) {
+  if ((hoje?.length ?? 0) >= LIMITE_DIARIO) {
     return NextResponse.json({ erro: `Limite de ${LIMITE_DIARIO} imagens por dia atingido (proteção de custo).` }, { status: 429 });
+  }
+  const gastoHojeUsd = (hoje ?? []).reduce((t, l) => t + custoDaLinhaUSD(l), 0);
+  if (gastoHojeUsd >= LIMITE_DIARIO_REAIS / USD_BRL) {
+    return NextResponse.json(
+      {
+        erro: `Limite de gasto diário atingido (${formatarReais(gastoHojeUsd, USD_BRL)} de R$ ${LIMITE_DIARIO_REAIS.toFixed(2).replace(".", ",")}). Amanhã libera de novo, ou aumente GERADOR_LIMITE_DIARIO_REAIS na Vercel.`,
+      },
+      { status: 429 }
+    );
   }
 
   const referencias: Referencia[] = [];
@@ -116,12 +128,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   // Texto na imagem e trabalho com referência sempre vão pro Premium (o
   // Rápido erra letras, desenha mal e tende a devolver a referência igual).
-  // No Nano Banana, texto/referência vão pro Premium (o Rápido erra letras e
-  // tende a devolver a referência igual). No GPT a qualidade é a que o
+  // No Nano Banana, texto desenhado pela IA vai pro Premium (o Rápido erra
+  // letras); o resto é escolha do Victor (o Premium custa ~3x mais). No GPT a qualidade é a que o
   // Victor escolheu ("Rápido" = medium, "Premium" = high, que é bem mais lento).
   const qualidade: Qualidade =
     form.get("qualidade") === "premium" ||
-    (motor === "nano" && exigePremium(modo, textoExato.length > 0 && !textoNaCamada, referencias.length > 0))
+    (motor === "nano" && textoExato.length > 0 && !textoNaCamada)
       ? "premium"
       : "rapido";
 
@@ -151,15 +163,19 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const aspecto = FORMATOS[formato].aspecto;
     let r = await gerarComMotor({ qualidade, prompt, referencias, aspecto });
     let aviso: string | null = null;
+    let retryUsou = false;
 
     // Trava anti-cópia: se o modelo devolveu a própria referência quase
     // igual (num modo que pede mudança), tenta de novo com mais força — só
     // se ainda der tempo dentro dos 60s da função.
     const pedeMudanca = modo === "angulo" || modo === "produto" || (modo === "criar" && referencias.length > 0);
+    // A nova tentativa automática dobra o custo, então só roda se ligada por
+    // GERADOR_RETRY_ANTICOPIA=1; por padrão só avisa e o Victor decide.
+    const retryLigado = process.env.GERADOR_RETRY_ANTICOPIA === "1";
     if (pedeMudanca && (await quaseIgual(r.imagem, referencias[0].data))) {
       const restante = 54_000 - (Date.now() - inicio);
       aviso = "A IA devolveu quase a mesma foto da referência. Use \"Refazer\" ou descreva a mudança com mais detalhe.";
-      if (restante >= 15_000) {
+      if (retryLigado && restante >= 15_000) {
         try {
           const r2 = await gerarComMotor({
             qualidade,
@@ -169,6 +185,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
             timeoutMs: restante,
           });
           r = r2;
+          retryUsou = true;
           if (!(await quaseIgual(r2.imagem, referencias[0].data))) aviso = null;
         } catch {
           // mantém a primeira imagem com o aviso
@@ -185,6 +202,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         margemPct: marca.logo_margem_pct,
       };
     }
+    // Custo estimado dessa imagem (uma chamada; a nova tentativa, se rodou, soma outra).
+    const chamadas = r.modelo && retryUsou ? 2 : 1;
+    const custoUsd = custoUSD(motor, qualidade) * chamadas;
     const base = await prepararBase(r.imagem, formato);
     const camada: OpcoesTexto | null =
       textoExato && textoNaCamada
@@ -222,12 +242,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         origem_id: origemId,
         base_path: basePath,
         camada: basePath ? camada : null,
+        custo_usd: custoUsd,
       })
       .select("*")
       .single();
     if (error) throw new Error(error.message);
 
-    return NextResponse.json({ imagem: linha, aviso });
+    return NextResponse.json({ imagem: linha, aviso, custoUsd });
   } catch (err) {
     const status = err instanceof GeminiErro ? 502 : 500;
     return NextResponse.json({ erro: err instanceof Error ? err.message : "Erro ao gerar a imagem." }, { status });

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { ImagemGerada } from "@/types/database";
+import { custoUSD, formatarReais } from "@/lib/custosGerador";
 
 type FormatoId = ImagemGerada["formato"];
 type ModoId = ImagemGerada["modo"];
@@ -114,7 +115,13 @@ export default function GeradorClient({
   marcaInicial,
   imagensIniciais,
   motoresDisponiveis,
+  gastoHojeUsd,
+  usdBrl,
+  limiteReais,
 }: {
+  gastoHojeUsd: number;
+  usdBrl: number;
+  limiteReais: number;
   accountId: string;
   nomeConta: string;
   motoresDisponiveis: { nano: boolean; gpt: boolean };
@@ -156,7 +163,8 @@ export default function GeradorClient({
   const [angulo, setAngulo] = useState("macro");
   const [avisos, setAvisos] = useState<string[]>([]);
   const [usarLogo, setUsarLogo] = useState(!!marcaInicial.logoUrl);
-  const [variacoes, setVariacoes] = useState(2);
+  const [variacoes, setVariacoes] = useState(1);
+  const [gastoUsd, setGastoUsd] = useState(gastoHojeUsd);
   const [refs, setRefs] = useState<Ref[]>([]);
   const [base, setBase] = useState<ImagemGerada | null>(null); // imagem sendo editada
   const [gerando, setGerando] = useState<Gerando[]>([]);
@@ -172,8 +180,13 @@ export default function GeradorClient({
   // letras mal), então a tela já mostra isso.
   const temTexto = modo === "lettering" || textoExato.trim().length > 0;
   // Referência também força o Premium: o Rápido tende a devolver a foto igual.
+  // Premium custa ~3x mais: começa no Rápido, exceto nos modos de produto/ângulo,
+  // onde o Premium segue a foto de referência bem melhor (dá pra trocar).
+  useEffect(() => {
+    setQualidade(modo === "angulo" || modo === "produto" ? "premium" : "rapido");
+  }, [modo]);
   const textoNaIA = temTexto && (textoModo === "ia" || modo === "editar");
-  const forcaPremium = motor === "nano" && (textoNaIA || modo === "produto" || modo === "angulo" || (refs.length > 0 && modo !== "editar"));
+  const forcaPremium = motor === "nano" && textoNaIA;
   const qualidadeEfetiva = forcaPremium ? "premium" : qualidade;
   const maxRefs = 6;
 
@@ -237,6 +250,7 @@ export default function GeradorClient({
       if (!res.ok) throw new Error(json?.erro || (res.status === 504 ? "Demorou demais. Tente \"Rápido\"." : "Erro ao gerar."));
       setGerando((g) => g.filter((x) => x.id !== id));
       setGaleria((g) => [json.imagem as ImagemGerada, ...g]);
+      if (typeof json.custoUsd === "number") setGastoUsd((g) => g + json.custoUsd);
       if (json.aviso) setAvisos((a) => (a.includes(json.aviso) ? a : [...a, json.aviso]));
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Erro ao gerar.";
@@ -584,7 +598,7 @@ export default function GeradorClient({
                   ? "Qualidade média: mais veloz e barata."
                   : "Qualidade alta: mais detalhe e texto melhor, mas é mais lenta e cara — pode estourar o limite de 60s."
                 : qualidadeEfetiva === "rapido"
-                  ? "Mais veloz e barato. Bom pra testar ideias."
+                  ? "Mais barato (~3x menos que o Premium). Bom pra testar ideias."
                   : "Melhor texto, detalhes e fidelidade. Demora mais."}
             </p>
           </div>
@@ -618,10 +632,15 @@ export default function GeradorClient({
 
         {erro && <div className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 ring-1 ring-red-200">{erro}</div>}
 
+        <p className="mt-5 text-center text-xs text-slate-500">
+          Custo estimado: <strong>{formatarReais(custoUSD(motor, qualidadeEfetiva) * (emEdicao ? 1 : variacoes), usdBrl)}</strong>{" "}
+          ({emEdicao ? 1 : variacoes} × {formatarReais(custoUSD(motor, qualidadeEfetiva), usdBrl)}) · Hoje:{" "}
+          <strong>{formatarReais(gastoUsd, usdBrl)}</strong> de R$ {limiteReais.toFixed(2).replace(".", ",")}
+        </p>
         <button
           onClick={gerar}
           disabled={ocupado}
-          className="mt-5 w-full rounded-full bg-brand-600 px-4 py-3 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-60"
+          className="mt-2 w-full rounded-full bg-brand-600 px-4 py-3 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-60"
         >
           {ocupado ? "Gerando…" : emEdicao ? "Aplicar edição" : `Gerar ${variacoes > 1 ? `${variacoes} imagens` : "imagem"}`}
         </button>
