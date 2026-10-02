@@ -318,5 +318,16 @@ export interface ImagemGerada {
   com_logo: boolean;
   favorita: boolean;
   origem_id: string | null;
+  // Texto aplicado pelo app (fontes de verdade) sobre a base sem texto; null
+  // quando o texto foi desenhado pela IA ou não há texto.
+  base_path: string | null;
+  camada: {
+    texto: string;
+    tema: string;
+    posicao: "topo" | "centro" | "baixo";
+    tamanhoPct: number;
+    cor: string | null;
+    veu: boolean;
+  } | null;
   created_at: string;
 }

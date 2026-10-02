@@ -19,12 +19,12 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
   const admin = createAdminClient();
   const { data: img } = await admin
     .from("imagens_geradas")
-    .select("storage_path")
+    .select("storage_path, base_path")
     .eq("id", params.imgId)
     .eq("account_id", params.id)
     .maybeSingle();
   if (!img) return NextResponse.json({ ok: true });
-  await admin.storage.from(BUCKET_GERADOR).remove([img.storage_path]);
+  await admin.storage.from(BUCKET_GERADOR).remove([img.storage_path, ...(img.base_path ? [img.base_path] : [])]);
   await admin.from("imagens_geradas").delete().eq("id", params.imgId).eq("account_id", params.id);
   return NextResponse.json({ ok: true });
 }

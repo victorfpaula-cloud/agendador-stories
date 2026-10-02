@@ -53,6 +53,19 @@ const ESTILOS_LETTERING: { id: string; rotulo: string }[] = [
   { id: "rustico", rotulo: "Rústico artesanal" },
 ];
 
+const TEMAS_TEXTO: { id: string; rotulo: string }[] = [
+  { id: "elegante", rotulo: "Elegante dourado" },
+  { id: "classico", rotulo: "Clássico serifado" },
+  { id: "caligrafico", rotulo: "Caligráfico" },
+  { id: "moderno", rotulo: "Moderno impacto" },
+  { id: "neon", rotulo: "Neon" },
+  { id: "vintage", rotulo: "Retrô / vintage" },
+  { id: "minimalista", rotulo: "Minimalista" },
+  { id: "rustico", rotulo: "Rústico (giz)" },
+];
+
+type OpcoesTexto = { tema: string; posicao: "topo" | "centro" | "baixo"; tamanhoPct: number; cor: string | null; veu: boolean };
+
 const ANGULOS: { id: string; rotulo: string }[] = [
   { id: "macro", rotulo: "Macro (bem de perto)" },
   { id: "tres_quartos", rotulo: "45° (3/4)" },
@@ -116,6 +129,10 @@ export default function GeradorClient({
   const [pedido, setPedido] = useState("");
   const [textoExato, setTextoExato] = useState("");
   const [estiloLettering, setEstiloLettering] = useState("auto");
+  // "camada" = o app escreve o texto com fontes de verdade (recomendado);
+  // "ia" = a IA desenha as letras.
+  const [textoModo, setTextoModo] = useState<"camada" | "ia">("camada");
+  const [opTexto, setOpTexto] = useState<OpcoesTexto>({ tema: "elegante", posicao: "topo", tamanhoPct: 12, cor: null, veu: true });
   const [angulo, setAngulo] = useState("macro");
   const [avisos, setAvisos] = useState<string[]>([]);
   const [usarLogo, setUsarLogo] = useState(!!marcaInicial.logoUrl);
@@ -135,7 +152,8 @@ export default function GeradorClient({
   // letras mal), então a tela já mostra isso.
   const temTexto = modo === "lettering" || textoExato.trim().length > 0;
   // Referência também força o Premium: o Rápido tende a devolver a foto igual.
-  const forcaPremium = temTexto || modo === "produto" || modo === "angulo" || (refs.length > 0 && modo !== "editar");
+  const textoNaIA = temTexto && (textoModo === "ia" || modo === "editar");
+  const forcaPremium = textoNaIA || modo === "produto" || modo === "angulo" || (refs.length > 0 && modo !== "editar");
   const qualidadeEfetiva = forcaPremium ? "premium" : qualidade;
   const maxRefs = 6;
 
@@ -161,7 +179,7 @@ export default function GeradorClient({
       const res = await fetch(`${api}/prompt`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pedido, modo, formato, textoExato, estiloLettering, temReferencia: refs.length > 0 }),
+        body: JSON.stringify({ pedido, modo, formato, textoExato, estiloLettering, textoModo: emEdicao ? "ia" : textoModo, temReferencia: refs.length > 0 }),
       });
       const json = await res.json().catch(() => null);
       if (!res.ok) throw new Error(json?.erro || "Não consegui turbinar o pedido.");
@@ -179,6 +197,12 @@ export default function GeradorClient({
     form.set("formato", formato);
     form.set("qualidade", qualidadeEfetiva);
     form.set("estiloLettering", estiloLettering);
+    form.set("textoModo", textoModo);
+    form.set("temaTexto", opTexto.tema);
+    form.set("posicaoTexto", opTexto.posicao);
+    form.set("tamanhoTexto", String(opTexto.tamanhoPct));
+    form.set("corTexto", opTexto.cor ?? "");
+    form.set("veuTexto", opTexto.veu ? "1" : "0");
     form.set("angulo", angulo);
     form.set("pedido", pedido);
     form.set("textoExato", textoExato);
@@ -396,27 +420,52 @@ export default function GeradorClient({
             placeholder={emEdicao ? "Ex: Trocar o título para: Estamos Abertos" : "Ex: PROMOÇÃO DE SEXTA\nChopp em dobro até 20h"}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-600 focus:outline-none"
           />
-          <p className="mt-1 text-xs text-slate-500">
-            Vai escrito exatamente assim. Quando há texto, o app usa automaticamente a qualidade <strong>Premium</strong> (a que desenha letras bem).
-          </p>
+          <p className="mt-1 text-xs text-slate-500">Vai escrito exatamente assim, com a grafia que você digitou.</p>
 
-          {temTexto && (
-            <div className="mt-3">
-              <div className="mb-1 text-sm font-medium text-slate-700">Estilo do lettering</div>
-              <div className="flex flex-wrap gap-2">
-                {ESTILOS_LETTERING.map((e) => (
+          {temTexto && !emEdicao && (
+            <div className="mt-3 space-y-3 rounded-lg bg-slate-50 p-3 ring-1 ring-slate-200">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {(
+                  [
+                    ["camada", "Texto profissional", "A IA faz a arte; o app escreve o texto com fontes de verdade. Letras perfeitas e dá pra editar depois."],
+                    ["ia", "A IA desenha o texto", "Letras integradas à cena (3D, neon, giz…), mas podem sair com erros. Usa o modo Premium."],
+                  ] as const
+                ).map(([id, titulo, dica]) => (
                   <button
-                    key={e.id}
+                    key={id}
                     type="button"
-                    onClick={() => setEstiloLettering(e.id)}
-                    className={`rounded-full px-3 py-1.5 text-xs transition ${
-                      estiloLettering === e.id ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    onClick={() => setTextoModo(id)}
+                    className={`rounded-lg px-3 py-2 text-left text-sm ring-1 transition ${
+                      textoModo === id ? "bg-brand-600 text-white ring-brand-600" : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50"
                     }`}
                   >
-                    {e.rotulo}
+                    <div className="font-medium">{titulo}</div>
+                    <div className={`text-xs ${textoModo === id ? "text-white/80" : "text-slate-500"}`}>{dica}</div>
                   </button>
                 ))}
               </div>
+
+              {textoModo === "camada" ? (
+                <ControlesTexto valor={opTexto} onChange={setOpTexto} />
+              ) : (
+                <div>
+                  <div className="mb-1 text-sm font-medium text-slate-700">Estilo do lettering</div>
+                  <div className="flex flex-wrap gap-2">
+                    {ESTILOS_LETTERING.map((e) => (
+                      <button
+                        key={e.id}
+                        type="button"
+                        onClick={() => setEstiloLettering(e.id)}
+                        className={`rounded-full px-3 py-1.5 text-xs transition ${
+                          estiloLettering === e.id ? "bg-brand-600 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-100"
+                        }`}
+                      >
+                        {e.rotulo}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -588,6 +637,7 @@ export default function GeradorClient({
                 onReusar={() => reaproveitar(img)}
                 onFavorita={() => alternarFavorita(img)}
                 onExcluir={() => excluir(img)}
+                onTextoAtualizado={(nova) => setGaleria((g) => g.map((x) => (x.id === nova.id ? nova : x)))}
               />
             ))}
           </div>
@@ -605,6 +655,7 @@ function CartaoImagem({
   onReusar,
   onFavorita,
   onExcluir,
+  onTextoAtualizado,
 }: {
   img: ImagemGerada;
   accountId: string;
@@ -613,7 +664,9 @@ function CartaoImagem({
   onReusar: () => void;
   onFavorita: () => void;
   onExcluir: () => void;
+  onTextoAtualizado: (img: ImagemGerada) => void;
 }) {
+  const [editandoTexto, setEditandoTexto] = useState(false);
   const btn = "rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200";
   return (
     <div className="overflow-hidden rounded-xl2 bg-white shadow-card ring-1 ring-slate-200">
@@ -632,6 +685,11 @@ function CartaoImagem({
         <button onClick={onEditar} className={btn}>
           Editar
         </button>
+        {img.camada && (
+          <button onClick={() => setEditandoTexto((v) => !v)} className={btn} title="Mudar o texto, o estilo ou a posição (sem gastar IA)">
+            Texto
+          </button>
+        )}
         <button onClick={onReusar} className={btn} title="Usar o mesmo pedido de novo">
           Refazer
         </button>
@@ -647,6 +705,16 @@ function CartaoImagem({
           ✕
         </button>
       </div>
+      {editandoTexto && img.camada && (
+        <EditorTexto
+          accountId={accountId}
+          img={img}
+          onSalvo={(nova) => {
+            onTextoAtualizado(nova);
+            setEditandoTexto(false);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -801,5 +869,120 @@ function PainelMarca({
         </div>
       )}
     </section>
+  );
+}
+
+// Escolha de estilo/posição/tamanho/cor do texto profissional (usado ao gerar
+// e ao reeditar uma imagem).
+function ControlesTexto({ valor, onChange }: { valor: OpcoesTexto; onChange: (v: OpcoesTexto) => void }) {
+  const set = (p: Partial<OpcoesTexto>) => onChange({ ...valor, ...p });
+  return (
+    <div className="space-y-3">
+      <div>
+        <div className="mb-1 text-sm font-medium text-slate-700">Estilo do texto</div>
+        <div className="flex flex-wrap gap-2">
+          {TEMAS_TEXTO.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => set({ tema: t.id })}
+              className={`rounded-full px-3 py-1.5 text-xs transition ${
+                valor.tema === t.id ? "bg-brand-600 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-100"
+              }`}
+            >
+              {t.rotulo}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <div className="mb-1 text-xs font-medium text-slate-700">Posição</div>
+          <div className="flex gap-1.5">
+            {(["topo", "centro", "baixo"] as const).map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => set({ posicao: p })}
+                className={`flex-1 rounded-lg px-2 py-1.5 text-xs capitalize ring-1 transition ${
+                  valor.posicao === p ? "bg-brand-600 text-white ring-brand-600" : "bg-white text-slate-600 ring-slate-200 hover:bg-slate-100"
+                }`}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <div className="mb-1 text-xs font-medium text-slate-700">Tamanho: {valor.tamanhoPct}</div>
+          <input type="range" min={6} max={22} value={valor.tamanhoPct} onChange={(e) => set({ tamanhoPct: Number(e.target.value) })} className="w-full" />
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-4">
+        <label className="flex items-center gap-2 text-xs text-slate-700">
+          Cor
+          <input type="color" value={valor.cor ?? "#ffffff"} onChange={(e) => set({ cor: e.target.value })} className="h-7 w-9 cursor-pointer rounded border border-slate-300" />
+          {valor.cor ? (
+            <button type="button" onClick={() => set({ cor: null })} className="underline">
+              usar cor do estilo
+            </button>
+          ) : (
+            <span className="text-slate-400">(a do estilo)</span>
+          )}
+        </label>
+        <label className="flex items-center gap-1.5 text-xs text-slate-700">
+          <input type="checkbox" checked={valor.veu} onChange={(e) => set({ veu: e.target.checked })} />
+          Escurecer atrás do texto (mais contraste)
+        </label>
+      </div>
+    </div>
+  );
+}
+
+// Reedita o texto de uma imagem já gerada: refaz só a camada de texto sobre a
+// base guardada — instantâneo e sem gastar IA.
+function EditorTexto({ accountId, img, onSalvo }: { accountId: string; img: ImagemGerada; onSalvo: (img: ImagemGerada) => void }) {
+  const c = img.camada!;
+  const [texto, setTexto] = useState(c.texto);
+  const [op, setOp] = useState<OpcoesTexto>({ tema: c.tema, posicao: c.posicao, tamanhoPct: c.tamanhoPct, cor: c.cor, veu: c.veu });
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  async function aplicar() {
+    setSalvando(true);
+    setErro(null);
+    try {
+      const res = await fetch(`/api/accounts/${accountId}/gerador/imagens/${img.id}/texto`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ texto, tema: op.tema, posicao: op.posicao, tamanhoPct: op.tamanhoPct, cor: op.cor, veu: op.veu }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(json?.erro || "Erro ao aplicar o texto.");
+      onSalvo(json.imagem as ImagemGerada);
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Erro ao aplicar o texto.");
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  return (
+    <div className="space-y-3 border-t border-slate-200 bg-slate-50 p-3">
+      <textarea
+        value={texto}
+        onChange={(e) => setTexto(e.target.value)}
+        rows={3}
+        maxLength={600}
+        className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm focus:border-brand-600 focus:outline-none"
+      />
+      <ControlesTexto valor={op} onChange={setOp} />
+      {erro && <p className="text-xs text-red-600">{erro}</p>}
+      <button onClick={aplicar} disabled={salvando} className="w-full rounded-full bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60">
+        {salvando ? "Aplicando…" : "Aplicar texto (sem gastar IA)"}
+      </button>
+    </div>
   );
 }

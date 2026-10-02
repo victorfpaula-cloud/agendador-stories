@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { agoraEmSaoPaulo } from "@/lib/days";
+import { ehPosicaoTexto, ehTemaTexto, type OpcoesTexto } from "@/lib/tipografia";
 import { GeminiErro, gerarImagem, type Qualidade, type Referencia } from "@/lib/gemini";
 import {
   BUCKET_GERADOR,
@@ -13,7 +14,8 @@ import {
   ehFormato,
   ehModo,
   exigePremium,
-  finalizarImagem,
+  comporFinal,
+  prepararBase,
   montarPrompt,
   quaseIgual,
 } from "@/lib/geradorImagens";
@@ -45,6 +47,17 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const usarLogo = form.get("usarLogo") === "1";
   const estiloBruto: unknown = form.get("estiloLettering");
   const estiloLettering = ehEstiloLettering(estiloBruto) ? estiloBruto : "auto";
+  // "camada" (padrão): a IA faz só a arte e o app escreve o texto com fontes
+  // de verdade; "ia": a IA desenha as letras. Em edição, sempre "ia".
+  const textoNaCamada = form.get("textoModo") !== "ia" && modo !== "editar";
+  const temaBruto: unknown = form.get("temaTexto");
+  const tema = ehTemaTexto(temaBruto) ? temaBruto : "elegante";
+  const posBruta: unknown = form.get("posicaoTexto");
+  const posicaoTexto = ehPosicaoTexto(posBruta) ? posBruta : "topo";
+  const tamanhoTexto = Math.min(22, Math.max(6, Number(form.get("tamanhoTexto")) || 12));
+  const corBruta = String(form.get("corTexto") ?? "");
+  const corTexto = /^#[0-9a-fA-F]{6}$/.test(corBruta) ? corBruta : null;
+  const veuTexto = form.get("veuTexto") !== "0";
   const anguloBruto: unknown = form.get("angulo");
   const angulo = ehAngulo(anguloBruto) ? anguloBruto : "livre";
   const baseId = String(form.get("baseImagemId") ?? "");
@@ -102,7 +115,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   // Texto na imagem e trabalho com referência sempre vão pro Premium (o
   // Rápido erra letras, desenha mal e tende a devolver a referência igual).
   const qualidade: Qualidade =
-    form.get("qualidade") === "premium" || exigePremium(modo, textoExato, referencias.length > 0) ? "premium" : "rapido";
+    form.get("qualidade") === "premium" || exigePremium(modo, textoExato.length > 0 && !textoNaCamada, referencias.length > 0) ? "premium" : "rapido";
 
   const marca = await carregarMarca(admin, params.id);
   const comLogo = usarLogo && !!marca?.logo_path;
@@ -118,6 +131,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     qtdReferencias: referencias.length,
     estiloLettering,
     angulo,
+    textoNaCamada,
+    posicaoTexto,
   };
   const prompt = montarPrompt(parametrosPrompt);
 
@@ -160,12 +175,27 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         margemPct: marca.logo_margem_pct,
       };
     }
-    const final = await finalizarImagem(r.imagem, formato, logo);
+    const base = await prepararBase(r.imagem, formato);
+    const camada: OpcoesTexto | null =
+      textoExato && textoNaCamada
+        ? { texto: textoExato, tema, posicao: posicaoTexto, tamanhoPct: tamanhoTexto, cor: corTexto, veu: veuTexto }
+        : null;
+    const final = await comporFinal(base, formato, camada, logo);
 
-    const path = `${params.id}/${randomUUID()}.jpg`;
+    const id = randomUUID();
+    const path = `${params.id}/${id}.jpg`;
     const { error: upErr } = await admin.storage.from(BUCKET_GERADOR).upload(path, final, { contentType: "image/jpeg" });
     if (upErr) throw new Error(`Falha ao salvar a imagem: ${upErr.message}`);
     const { data: pub } = admin.storage.from(BUCKET_GERADOR).getPublicUrl(path);
+
+    // A base (sem texto) fica guardada pra dar pra trocar/ajustar o texto
+    // depois sem gastar IA.
+    let basePath: string | null = null;
+    if (camada) {
+      basePath = `${params.id}/${id}-base.jpg`;
+      const { error: baseErr } = await admin.storage.from(BUCKET_GERADOR).upload(basePath, base, { contentType: "image/jpeg" });
+      if (baseErr) basePath = null;
+    }
 
     const { data: linha, error } = await admin
       .from("imagens_geradas")
@@ -180,6 +210,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         prompt_final: prompt,
         com_logo: !!logo,
         origem_id: origemId,
+        base_path: basePath,
+        camada: basePath ? camada : null,
       })
       .select("*")
       .single();

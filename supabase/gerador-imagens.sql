@@ -37,3 +37,11 @@ create table public.imagens_geradas (
 );
 create index imagens_geradas_conta_idx on public.imagens_geradas (account_id, created_at desc);
 alter table public.imagens_geradas enable row level security;
+
+-- Camada de texto profissional (01/10/2026): a IA gera só a arte (base_path,
+-- sem texto) e o app escreve o texto com fontes de verdade por cima. `camada`
+-- guarda as opções (texto, tema, posição, tamanho, cor, véu) pra reeditar o
+-- texto depois sem gastar IA. Aplicado em produção (migração "gerador_camada_texto").
+alter table public.imagens_geradas
+  add column base_path text,
+  add column camada jsonb;
