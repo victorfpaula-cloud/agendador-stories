@@ -29,8 +29,21 @@ export function marcarComoGeradaPorIA(file: File): File {
   return file;
 }
 
-export async function prepararImagem(file: File): Promise<File> {
-  if (ARQUIVOS_GERADOS_POR_IA.has(file)) return file;
+// Se o navegador demorar mais que isso pra decodificar/redesenhar (já vimos
+// travar no Safari com alguns arquivos), desiste e segue com o original —
+// melhor enviar a foto com o metadado do que deixar o agendamento preso em
+// "Enviando mídia…" pra sempre (01/10/2026).
+const TEMPO_LIMITE_MS = 10_000;
+
+export function prepararImagem(file: File): Promise<File> {
+  if (ARQUIVOS_GERADOS_POR_IA.has(file)) return Promise.resolve(file);
+  return Promise.race([
+    processarImagem(file),
+    new Promise<File>((resolve) => setTimeout(() => resolve(file), TEMPO_LIMITE_MS)),
+  ]);
+}
+
+async function processarImagem(file: File): Promise<File> {
   // Só mexe em foto (nunca em vídeo), e pula formatos que não fazem sentido
   // redesenhar num canvas (SVG é vetorial; GIF pode ser animado e perderia
   // os quadros extras se fosse achatado numa imagem só) — esses dois
