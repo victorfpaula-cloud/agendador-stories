@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { ImagemGerada } from "@/types/database";
 
@@ -667,6 +667,7 @@ function CartaoImagem({
   onTextoAtualizado: (img: ImagemGerada) => void;
 }) {
   const [editandoTexto, setEditandoTexto] = useState(false);
+  const [enviandoEngine, setEnviandoEngine] = useState(false);
   const btn = "rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200";
   return (
     <div className="overflow-hidden rounded-xl2 bg-white shadow-card ring-1 ring-slate-200">
@@ -698,6 +699,9 @@ function CartaoImagem({
             Usar no Feed
           </Link>
         )}
+        <button onClick={() => setEnviandoEngine((v) => !v)} className={btn} title="Mandar pra uma categoria do Story Engine">
+          Story Engine
+        </button>
         <button onClick={onFavorita} className={btn} aria-label="Favoritar">
           {img.favorita ? "★" : "☆"}
         </button>
@@ -705,6 +709,7 @@ function CartaoImagem({
           ✕
         </button>
       </div>
+      {enviandoEngine && <EnviarParaStoryEngine accountId={accountId} img={img} onFechar={() => setEnviandoEngine(false)} />}
       {editandoTexto && img.camada && (
         <EditorTexto
           accountId={accountId}
@@ -982,6 +987,83 @@ function EditorTexto({ accountId, img, onSalvo }: { accountId: string; img: Imag
       {erro && <p className="text-xs text-red-600">{erro}</p>}
       <button onClick={aplicar} disabled={salvando} className="w-full rounded-full bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60">
         {salvando ? "Aplicando…" : "Aplicar texto (sem gastar IA)"}
+      </button>
+    </div>
+  );
+}
+
+// Escolhe a categoria do Story Engine da conta e manda a imagem pra lá.
+function EnviarParaStoryEngine({ accountId, img, onFechar }: { accountId: string; img: ImagemGerada; onFechar: () => void }) {
+  const [categorias, setCategorias] = useState<{ id: string; nome: string }[] | null>(null);
+  const [escolhida, setEscolhida] = useState("");
+  const [enviando, setEnviando] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; texto: string } | null>(null);
+
+  useEffect(() => {
+    let cancelado = false;
+    fetch(`/api/accounts/${accountId}/ciclo-categorias`)
+      .then((r) => r.json())
+      .then((j) => {
+        if (cancelado) return;
+        const lista = ((j?.categorias ?? []) as { id: string; nome: string }[]).map((c) => ({ id: c.id, nome: c.nome }));
+        setCategorias(lista);
+        if (lista.length > 0) setEscolhida(lista[0].id);
+      })
+      .catch(() => !cancelado && setCategorias([]));
+    return () => {
+      cancelado = true;
+    };
+  }, [accountId]);
+
+  async function enviar() {
+    setEnviando(true);
+    setMsg(null);
+    try {
+      const res = await fetch(`/api/accounts/${accountId}/gerador/imagens/${img.id}/story-engine`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ categoryId: escolhida }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(json?.erro || "Erro ao enviar.");
+      setMsg({ ok: true, texto: `Enviada pra categoria “${json.categoria}”.` });
+    } catch (e) {
+      setMsg({ ok: false, texto: e instanceof Error ? e.message : "Erro ao enviar." });
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  return (
+    <div className="space-y-2 border-t border-slate-200 bg-slate-50 p-3 text-sm">
+      {categorias === null ? (
+        <p className="text-xs text-slate-500">Carregando categorias…</p>
+      ) : categorias.length === 0 ? (
+        <p className="text-xs text-slate-600">Essa conta ainda não tem categoria no Story Engine. Crie uma na aba “Story Engine”.</p>
+      ) : (
+        <>
+          {img.formato !== "story" && (
+            <p className="text-xs text-amber-700">Atenção: essa imagem não é 9:16, vai aparecer com bordas no Story.</p>
+          )}
+          <select value={escolhida} onChange={(e) => setEscolhida(e.target.value)} className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
+            {categorias.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.nome}
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={enviar}
+            disabled={enviando || !escolhida || msg?.ok === true}
+            className="w-full rounded-full bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
+          >
+            {enviando ? "Enviando…" : "Enviar pra essa categoria"}
+          </button>
+        </>
+      )}
+      {msg && <p className={`text-xs ${msg.ok ? "text-green-700" : "text-red-600"}`}>{msg.texto}</p>}
+      <button onClick={onFechar} className="text-xs text-slate-500 underline">
+        Fechar
       </button>
     </div>
   );
