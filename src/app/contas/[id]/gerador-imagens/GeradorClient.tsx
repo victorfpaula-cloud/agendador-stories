@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { ImagemGerada } from "@/types/database";
+import { enviarMidiaDireto } from "@/lib/uploadDireto";
 import { custoUSD, formatarReais } from "@/lib/custosGerador";
 
 type FormatoId = ImagemGerada["formato"];
@@ -685,6 +686,12 @@ export default function GeradorClient({
         </section>
       )}
 
+      <ImportarImagem
+        accountId={accountId}
+        temLogo={!!marca.logoUrl}
+        onImportada={(img) => setGaleria((g) => [img, ...g])}
+      />
+
       <section>
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-slate-700">Galeria ({galeria.length})</h2>
@@ -759,8 +766,8 @@ function CartaoImagem({
         <button onClick={onEditar} className={btn}>
           Editar
         </button>
-        {img.camada && (
-          <button onClick={() => setEditandoTexto((v) => !v)} className={btn} title="Mudar o texto, o estilo ou a posição (sem gastar IA)">
+        {img.base_path && (
+          <button onClick={() => setEditandoTexto((v) => !v)} className={btn} title="Adicionar/mudar o texto, o estilo ou a posição (sem gastar IA)">
             Texto
           </button>
         )}
@@ -783,7 +790,7 @@ function CartaoImagem({
         </button>
       </div>
       {enviandoEngine && <EnviarParaStoryEngine accountId={accountId} img={img} onFechar={() => setEnviandoEngine(false)} />}
-      {editandoTexto && img.camada && (
+      {editandoTexto && img.base_path && (
         <EditorTexto
           accountId={accountId}
           img={img}
@@ -1022,7 +1029,7 @@ function ControlesTexto({ valor, onChange }: { valor: OpcoesTexto; onChange: (v:
 // Reedita o texto de uma imagem já gerada: refaz só a camada de texto sobre a
 // base guardada — instantâneo e sem gastar IA.
 function EditorTexto({ accountId, img, onSalvo }: { accountId: string; img: ImagemGerada; onSalvo: (img: ImagemGerada) => void }) {
-  const c = img.camada!;
+  const c = img.camada ?? { texto: "", tema: "elegante", posicao: "topo" as const, tamanhoPct: 12, cor: null, veu: true };
   const [texto, setTexto] = useState(c.texto);
   const [op, setOp] = useState<OpcoesTexto>({ tema: c.tema, posicao: c.posicao, tamanhoPct: c.tamanhoPct, cor: c.cor, veu: c.veu });
   const [salvando, setSalvando] = useState(false);
@@ -1139,5 +1146,82 @@ function EnviarParaStoryEngine({ accountId, img, onFechar }: { accountId: string
         Fechar
       </button>
     </div>
+  );
+}
+
+// Traz pra galeria uma imagem feita fora do app (ex.: Google Flow). Não gasta
+// IA: depois dá pra pôr texto profissional, logo, mandar pro Story Engine etc.
+function ImportarImagem({ accountId, temLogo, onImportada }: { accountId: string; temLogo: boolean; onImportada: (img: ImagemGerada) => void }) {
+  const [formato, setFormato] = useState<FormatoId>("story");
+  const [usarLogo, setUsarLogo] = useState(false);
+  const [enviando, setEnviando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  async function importar(arquivos: FileList | null) {
+    if (!arquivos || arquivos.length === 0) return;
+    setErro(null);
+    setEnviando(true);
+    try {
+      for (const file of Array.from(arquivos)) {
+        if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) throw new Error("Use imagens JPG, PNG ou WebP.");
+        // Sobe direto pro Storage (sem o limite de ~4,5MB do servidor) e o servidor ajusta ao formato.
+        const up = await enviarMidiaDireto(file, { bucket: "gerador-imagens", pasta: `${accountId}/import` });
+        const res = await fetch(`/api/accounts/${accountId}/gerador/importar`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ path: up.path, formato, usarLogo: usarLogo && temLogo }),
+        });
+        const json = await res.json().catch(() => null);
+        if (!res.ok) throw new Error(json?.erro || "Erro ao importar.");
+        onImportada(json.imagem as ImagemGerada);
+      }
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Erro ao importar.");
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  return (
+    <details className="rounded-xl2 bg-white p-4 shadow-card ring-1 ring-slate-200">
+      <summary className="cursor-pointer text-sm font-semibold text-slate-700">Importar imagem de fora (Flow, ChatGPT, etc.) — sem custo</summary>
+      <div className="mt-3 space-y-3">
+        <p className="text-xs text-slate-500">
+          Gerou a imagem em outro lugar? Traga pra cá e use o texto profissional, o logo, o Story Engine e o Feed daqui. Não gasta IA.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {FORMATOS.map((f) => (
+            <button
+              key={f.id}
+              type="button"
+              onClick={() => setFormato(f.id)}
+              className={`rounded-full px-3 py-1.5 text-xs transition ${formato === f.id ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
+            >
+              {f.rotulo}
+            </button>
+          ))}
+        </div>
+        <label className={`flex items-center gap-2 text-xs ${temLogo ? "text-slate-700" : "text-slate-400"}`}>
+          <input type="checkbox" disabled={!temLogo} checked={usarLogo && temLogo} onChange={(e) => setUsarLogo(e.target.checked)} />
+          Colocar o logo da marca
+        </label>
+        <label className="inline-block cursor-pointer rounded-full bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700">
+          {enviando ? "Importando…" : "Escolher imagem(ns)"}
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            multiple
+            disabled={enviando}
+            className="hidden"
+            onChange={(e) => {
+              void importar(e.target.files);
+              e.target.value = "";
+            }}
+          />
+        </label>
+        <p className="text-xs text-slate-400">A imagem é ajustada ao formato escolhido (recorte centralizado).</p>
+        {erro && <p className="text-xs text-red-600">{erro}</p>}
+      </div>
+    </details>
   );
 }

@@ -5,7 +5,7 @@ import { criarUploadAssinado } from "@/lib/storage";
 // Lista fechada de propósito — essa rota gera um link que autoriza escrita
 // direta no Storage, então não pode aceitar qualquer nome de bucket vindo
 // do cliente.
-const BUCKETS_PERMITIDOS = new Set(["feed-media", "story-media"]);
+const BUCKETS_PERMITIDOS = new Set(["feed-media", "story-media", "gerador-imagens"]);
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
