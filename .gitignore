@@ -4,3 +4,7 @@ node_modules
 .env.local
 .vercel
 *.log
+
+# Gerados pelo build/typecheck
+tsconfig.tsbuildinfo
+next-env.d.ts
