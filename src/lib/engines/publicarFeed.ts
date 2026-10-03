@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { publicarPostFeed, publicarPostCarrossel, publicarCrossPostNaPagina, MetaApiError } from "@/lib/meta";
 import { enviarEmail } from "@/lib/email";
+import { MENSAGEM_DIA_FECHADO, carregarDiasFechados, chaveDiaFechado, dataEmSaoPaulo } from "@/lib/diasFechados";
 import type { Account, FeedPostAccount, FeedPostMedia } from "@/types/database";
 
 function formatarDataHoraSaoPaulo(iso: string): string {
@@ -43,6 +44,12 @@ export async function executarPublicarFeed(admin: ReturnType<typeof createAdminC
 
   const resultados: Array<{ postId: string; status: string; detalhe?: string }> = [];
 
+  // Contas com "dia fechado" não publicam nada nesse dia (ver src/lib/diasFechados.ts).
+  const fechados = await carregarDiasFechados(
+    admin,
+    ((devidos ?? []) as any[]).map((p) => dataEmSaoPaulo(p.scheduled_at))
+  );
+
   for (const post of (devidos ?? []) as any[]) {
     // Reivindica o post antes de publicar (update condicional em status='pending'):
     // se dois ciclos do cron se sobrepuserem por qualquer motivo, só um consegue
@@ -63,7 +70,21 @@ export async function executarPublicarFeed(admin: ReturnType<typeof createAdminC
     const contasAlvo = (post.feed_post_accounts ?? []) as (FeedPostAccount & { accounts: Account })[];
     // Só as que ainda estão 'pending' — as que já publicaram ('success') ou
     // já esgotaram as tentativas ('error') não são tocadas de novo.
-    const contasParaTentar = contasAlvo.filter((c) => c.status === "pending");
+    const diaDoPost = dataEmSaoPaulo(post.scheduled_at);
+    // Contas fechadas nesse dia: cancela só pra elas (as outras publicam normal).
+    let algumFechado = false;
+    const contasParaTentar: typeof contasAlvo = [];
+    for (const c of contasAlvo.filter((c) => c.status === "pending")) {
+      if (fechados.has(chaveDiaFechado(c.account_id, diaDoPost))) {
+        await admin
+          .from("feed_post_accounts")
+          .update({ status: "error", error_message: MENSAGEM_DIA_FECHADO })
+          .eq("id", c.id);
+        algumFechado = true;
+      } else {
+        contasParaTentar.push(c);
+      }
+    }
 
     if (midias.length === 0) {
       await admin
@@ -98,6 +119,9 @@ export async function executarPublicarFeed(admin: ReturnType<typeof createAdminC
     // antes contam pro resultado final mesmo que não sejam re-tentadas
     // nesta rodada.
     let algumSucesso = contasAlvo.some((c) => c.status === "success");
+    // Contas que já estavam em erro ANTES desta rodada (inclui "dia fechado" de
+    // rodadas anteriores) contam como erro definitivo; as fechadas agora, não
+    // entram aqui — ver `algumFechado`.
     let algumErroDefinitivo = contasAlvo.some((c) => c.status === "error");
     let aindaPendente = false;
     const falhasPorConta: { conta: string; mensagem: string }[] = [];
@@ -190,13 +214,17 @@ export async function executarPublicarFeed(admin: ReturnType<typeof createAdminC
     // Status final do post: "pending" enquanto sobrar conta ainda
     // tentando, "success" só se TODAS as contas-alvo publicaram, "error" se
     // pelo menos uma esgotou as tentativas.
-    const statusFinal = aindaPendente ? "pending" : algumErroDefinitivo ? "error" : "success";
+    const statusFinal = aindaPendente ? "pending" : algumErroDefinitivo || algumFechado ? "error" : "success";
     await admin
       .from("feed_posts")
       .update({
         status: statusFinal,
         published_at: algumSucesso ? new Date().toISOString() : null,
-        error_message: algumErroDefinitivo ? "Falhou em pelo menos uma conta-alvo — veja o detalhe por conta." : null,
+        error_message: falhasPorConta.length > 0 || (algumErroDefinitivo && !algumFechado)
+          ? "Falhou em pelo menos uma conta-alvo — veja o detalhe por conta."
+          : algumFechado
+            ? MENSAGEM_DIA_FECHADO
+            : null,
       })
       .eq("id", post.id);
 
@@ -204,7 +232,7 @@ export async function executarPublicarFeed(admin: ReturnType<typeof createAdminC
     // ("error" só acontece depois de esgotar as tentativas de cada conta
     // que falhou) — enquanto estiver "pending" o próximo ciclo do cron
     // tenta de novo sozinho, sem alarme falso por uma falha passageira.
-    if (statusFinal === "error") {
+    if (statusFinal === "error" && falhasPorConta.length > 0) {
       await enviarEmail({
         assunto: `Erro ao publicar no Feed — ${post.media_type}`,
         corpo:

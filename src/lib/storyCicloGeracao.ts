@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { agoraEmSaoPaulo } from "@/lib/days";
+import { carregarDiasFechados, chaveDiaFechado } from "@/lib/diasFechados";
 
 // Geração de Stories do Story Engine (banco de imagens por categoria, gira
 // sem repetir) — pra cada horário ativo cujo dia da semana de hoje bate com
@@ -28,7 +29,7 @@ export async function executarGeracaoStoriesCiclo(admin: ReturnType<typeof creat
   const categoriaIds = Array.from(new Set((horarios ?? []).map((h) => h.category_id as string)));
   const { data: categorias, error: erroCategorias } = await admin
     .from("story_ciclo_categoria")
-    .select("id, dias_semana")
+    .select("id, account_id, dias_semana")
     .eq("ativa", true)
     .in("id", categoriaIds.length > 0 ? categoriaIds : [""]);
 
@@ -39,12 +40,21 @@ export async function executarGeracaoStoriesCiclo(admin: ReturnType<typeof creat
   const diasSemanaPorCategoria = new Map<string, number[]>(
     ((categorias ?? []) as { id: string; dias_semana: number[] }[]).map((c) => [c.id, c.dias_semana])
   );
+  const contaPorCategoria = new Map<string, string>(
+    ((categorias ?? []) as { id: string; account_id: string }[]).map((c) => [c.id, c.account_id])
+  );
+  // Conta com "dia fechado" hoje: nem gera o Story (não gasta imagem da fila).
+  const fechados = await carregarDiasFechados(admin, [dataISO]);
 
   const resultados: Record<string, { gerado: boolean; motivo: string }> = {};
 
   for (const h of (horarios ?? []) as { id: string; category_id: string }[]) {
     const diasSemana = diasSemanaPorCategoria.get(h.category_id);
     if (!diasSemana?.includes(diaSemanaIso)) continue;
+    if (fechados.has(chaveDiaFechado(contaPorCategoria.get(h.category_id) ?? "", dataISO))) {
+      resultados[h.id] = { gerado: false, motivo: "dia_fechado" };
+      continue;
+    }
 
     const { data } = await admin
       .rpc("gerar_story_ciclo", { p_horario_id: h.id, p_dia: dataISO })

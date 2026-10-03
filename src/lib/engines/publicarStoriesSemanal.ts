@@ -3,6 +3,7 @@ import { agoraEmSaoPaulo, paraMinutos } from "@/lib/days";
 import { publicarStory, MetaApiError } from "@/lib/meta";
 import { crossPostStoryFacebook } from "@/lib/crossPostStoryFacebook";
 import { enviarEmail } from "@/lib/email";
+import { carregarDiasFechados, chaveDiaFechado } from "@/lib/diasFechados";
 import type { Account, ScheduleSlot } from "@/types/database";
 
 // Motor do Stories semanal (rotina recorrente, schedule_slots/publish_log).
@@ -49,7 +50,11 @@ export async function executarPublicarStoriesSemanal(admin: ReturnType<typeof cr
 
   const candidatos = (slotsDoDia ?? []) as (ScheduleSlot & { accounts: Account })[];
 
+  // Contas com "dia fechado" hoje não publicam nada (ver src/lib/diasFechados.ts).
+  const fechados = await carregarDiasFechados(admin, [dataISO]);
+
   const devidos = candidatos.filter((s) => {
+    if (fechados.has(chaveDiaFechado(s.accounts.id, dataISO))) return false;
     const minutosSlot = paraMinutos(s.time_of_day);
     return minutosSlot <= minutosAgora && minutosAgora - minutosSlot <= TOLERANCIA_MINUTOS;
   });

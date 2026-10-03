@@ -3,6 +3,7 @@ import { publicarStory, MetaApiError } from "@/lib/meta";
 import { crossPostStoryFacebook } from "@/lib/crossPostStoryFacebook";
 import { agoraEmSaoPaulo } from "@/lib/days";
 import { enviarEmail } from "@/lib/email";
+import { MENSAGEM_DIA_FECHADO, carregarDiasFechados, chaveDiaFechado } from "@/lib/diasFechados";
 import type { Account, StoryPost } from "@/types/database";
 
 function formatarDataHoraSaoPaulo(iso: string): string {
@@ -44,6 +45,12 @@ export async function executarPublicarStoriesDrive(admin: ReturnType<typeof crea
 
   const resultados: Array<{ storyId: string; status: string; detalhe?: string }> = [];
 
+  // Contas com "dia fechado" não publicam nada nesse dia (ver src/lib/diasFechados.ts).
+  const fechados = await carregarDiasFechados(
+    admin,
+    ((devidos ?? []) as StoryPost[]).map((p) => p.dia)
+  );
+
   // Marca uma falha: se ainda não esgotou as tentativas, volta pra
   // 'pending' (o próximo ciclo do cron tenta de novo sozinho); só manda
   // e-mail quando já é a tentativa definitiva.
@@ -73,6 +80,17 @@ export async function executarPublicarStoriesDrive(admin: ReturnType<typeof crea
   }
 
   for (const item of (devidos ?? []) as (StoryPost & { accounts: Account })[]) {
+    // Dia fechado: cancela esse Story (não fica pendente pra sair no dia seguinte).
+    if (fechados.has(chaveDiaFechado(item.account_id, item.dia))) {
+      await admin
+        .from("story_posts")
+        .update({ status: "error", error_message: MENSAGEM_DIA_FECHADO })
+        .eq("id", item.id)
+        .eq("status", "pending");
+      resultados.push({ storyId: item.id, status: "fechado" });
+      continue;
+    }
+
     // Reivindica antes de publicar (update condicional em status='pending'):
     // se dois ciclos do cron se sobrepuserem, só um consegue "ganhar" o
     // Story — o outro vê 0 linhas afetadas e pula. Mesmo cuidado do motor

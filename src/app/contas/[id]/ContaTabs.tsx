@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import DiasFechados from "./DiasFechados";
 
 // Navegação em botões dentro de uma conta — Stories (rotina semanal, URL
 // permanece a mesma de sempre: /contas/[id]), Agendamento de Publicações
@@ -33,6 +34,7 @@ export default function ContaTabs({ accountId }: { accountId: string }) {
   ];
 
   return (
+    <>
     // Grade 2x2 no celular (4 botões nunca cabiam numa linha só sem cortar
     // na borda — achado por Victor em 18/09/2026); vira uma linha só a
     // partir do tablet, onde já sobra espaço de sobra. Com 5 botões, o
@@ -54,6 +56,8 @@ export default function ContaTabs({ accountId }: { accountId: string }) {
         </Link>
       ))}
     </div>
+      <DiasFechados accountId={accountId} />
+    </>
   );
 }
 

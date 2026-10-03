@@ -2,6 +2,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { publicarStory, MetaApiError } from "@/lib/meta";
 import { crossPostStoryFacebook } from "@/lib/crossPostStoryFacebook";
 import { enviarEmail } from "@/lib/email";
+import { MENSAGEM_DIA_FECHADO, carregarDiasFechados, chaveDiaFechado } from "@/lib/diasFechados";
 import type { Account, StoryCicloPost } from "@/types/database";
 
 function formatarDataHoraSaoPaulo(iso: string): string {
@@ -41,6 +42,12 @@ export async function executarPublicarStoriesCiclo(admin: ReturnType<typeof crea
 
   const resultados: Array<{ postId: string; status: string; detalhe?: string }> = [];
 
+  // Contas com "dia fechado" não publicam nada nesse dia (ver src/lib/diasFechados.ts).
+  const fechados = await carregarDiasFechados(
+    admin,
+    ((devidos ?? []) as StoryCicloPost[]).map((p) => p.dia)
+  );
+
   async function falharTentativa(item: StoryCicloPost, conta: Account, msg: string) {
     const tentativas = (item.tentativas ?? 0) + 1;
     const esgotou = tentativas >= LIMITE_TENTATIVAS;
@@ -65,6 +72,19 @@ export async function executarPublicarStoriesCiclo(admin: ReturnType<typeof crea
   }
 
   for (const item of (devidos ?? []) as (StoryCicloPost & { accounts: Account })[]) {
+    // Dia fechado: cancela esse Story (não fica pendente pra sair no dia
+    // seguinte) e devolve a imagem pra fila da categoria.
+    if (fechados.has(chaveDiaFechado(item.account_id, item.dia))) {
+      await admin
+        .from("story_ciclo_posts")
+        .update({ status: "error", error_message: MENSAGEM_DIA_FECHADO })
+        .eq("id", item.id)
+        .eq("status", "pending");
+      if (item.item_id) await admin.from("story_ciclo_item").update({ usado_em: null }).eq("id", item.item_id);
+      resultados.push({ postId: item.id, status: "fechado" });
+      continue;
+    }
+
     const { data: reivindicado } = await admin
       .from("story_ciclo_posts")
       .update({ status: "publishing" })
