@@ -33,13 +33,13 @@ export default function ContaTabs({ accountId }: { accountId: string }) {
     { href: `${base}/gerador-imagens`, label: "Gerador de imagens", ativo: !!emGerador, Icone: IconeGerador, largo: true },
   ];
 
+  // Grade 2x2 no celular (4 botões nunca cabiam numa linha só sem cortar
+  // na borda — achado por Victor em 18/09/2026); vira uma linha só a
+  // partir do tablet, onde já sobra espaço de sobra. Com 5 botões, o
+  // último fica sozinho numa 3a linha no celular — aceitável, ainda sem
+  // cortar borda.
   return (
     <>
-    // Grade 2x2 no celular (4 botões nunca cabiam numa linha só sem cortar
-    // na borda — achado por Victor em 18/09/2026); vira uma linha só a
-    // partir do tablet, onde já sobra espaço de sobra. Com 5 botões, o
-    // último fica sozinho numa 3a linha no celular — aceitável, ainda sem
-    // cortar borda.
     <div className="mb-6 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
       {abas.map((aba) => (
         <Link
