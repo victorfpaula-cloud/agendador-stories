@@ -14,7 +14,10 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
 
   const caption = String(body?.caption ?? "");
-  const scheduledAt = String(body?.scheduledAt ?? "");
+  // "Publicar agora": o horário vira o instante atual — o cron (a cada 5 min)
+  // pega no próximo ciclo, já que publica tudo com scheduled_at <= agora.
+  const publicarAgora = body?.publicarAgora === true;
+  const scheduledAt = publicarAgora ? new Date().toISOString() : String(body?.scheduledAt ?? "");
   const accountIds: string[] = Array.isArray(body?.accountIds)
     ? body.accountIds.filter((x: unknown) => typeof x === "string" && x)
     : [];
@@ -27,7 +30,7 @@ export async function POST(req: NextRequest) {
   if (!scheduledAt || Number.isNaN(Date.parse(scheduledAt))) {
     return NextResponse.json({ erro: "Escolha uma data e horário válidos." }, { status: 400 });
   }
-  if (new Date(scheduledAt).getTime() <= Date.now()) {
+  if (!publicarAgora && new Date(scheduledAt).getTime() <= Date.now()) {
     return NextResponse.json({ erro: "A data/horário do agendamento precisa ser no futuro." }, { status: 400 });
   }
   if (mediaItems.length === 0) {

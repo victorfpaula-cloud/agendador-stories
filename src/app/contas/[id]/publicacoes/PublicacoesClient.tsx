@@ -189,6 +189,15 @@ function ComporPost({
   // continua existindo, só a entrada mudou (ver PublicacoesDaContaPage).
   const [accountIds, setAccountIds] = useState<string[]>(defaultAccountId ? [defaultAccountId] : []);
   const [dataHora, setDataHora] = useState("");
+  // "Publicar agora": sai no próximo ciclo do cron (até ~5 min), sem agendar
+  // horário. Fica desligado por padrão e é exclusivo com a data/horário:
+  // ligar um desliga o outro.
+  const [publicarAgora, setPublicarAgora] = useState(false);
+  // Muda a cada publicação criada pra recriar o seletor de arquivo (campo de
+  // arquivo não controlado não limpa sozinho — antes ficava mostrando o nome
+  // da foto anterior, como se a página não tivesse atualizado).
+  const [inputKey, setInputKey] = useState(0);
+  const [sucesso, setSucesso] = useState<null | "agendada" | "agora">(null);
   const [enviando, setEnviando] = useState(false);
   const [progresso, setProgresso] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -214,15 +223,16 @@ function ComporPost({
       setErro("Escolha ao menos uma conta de destino.");
       return;
     }
-    if (!dataHora) {
-      setErro("Escolha a data e o horário do agendamento.");
+    if (!publicarAgora && !dataHora) {
+      setErro("Escolha a data e o horário do agendamento — ou ligue \"Publicar agora\".");
       return;
     }
-    const scheduledAt = new Date(dataHora);
-    if (Number.isNaN(scheduledAt.getTime()) || scheduledAt.getTime() <= Date.now()) {
+    const scheduledAt = publicarAgora ? new Date() : new Date(dataHora);
+    if (!publicarAgora && (Number.isNaN(scheduledAt.getTime()) || scheduledAt.getTime() <= Date.now())) {
       setErro("A data/horário do agendamento precisa ser no futuro.");
       return;
     }
+    const foiAgora = publicarAgora;
 
     setEnviando(true);
     try {
@@ -240,13 +250,14 @@ function ComporPost({
         midias.push({ ...midia, thumbnailDataUrl });
       }
 
-      setProgresso("Agendando…");
+      setProgresso(foiAgora ? "Enviando pra publicar…" : "Agendando…");
       const json = await chamarApi("/api/feed-posts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           caption,
           scheduledAt: scheduledAt.toISOString(),
+          publicarAgora: foiAgora,
           accountIds,
           media: midias,
         }),
@@ -257,6 +268,9 @@ function ComporPost({
       setCaption("");
       setAccountIds(defaultAccountId ? [defaultAccountId] : []);
       setDataHora("");
+      setPublicarAgora(false);
+      setInputKey((k) => k + 1);
+      setSucesso(foiAgora ? "agora" : "agendada");
     } catch (err) {
       setErro(err instanceof Error ? err.message : "Erro ao agendar a publicação.");
     } finally {
@@ -273,6 +287,7 @@ function ComporPost({
         <label className="block">
           <span className="mb-1 block text-xs font-medium text-slate-500">Foto(s) ou vídeo</span>
           <input
+            key={inputKey}
             type="file"
             accept="image/*,video/*"
             multiple
@@ -339,15 +354,37 @@ function ComporPost({
           </div>
         </div>
 
-        <label className="block">
+        <label className={`block ${publicarAgora ? "opacity-50" : ""}`}>
           <span className="mb-1 block text-xs font-medium text-slate-500">Data e horário</span>
           <input
             type="datetime-local"
             value={dataHora}
-            onChange={(e) => setDataHora(e.target.value)}
-            disabled={enviando}
+            onChange={(e) => {
+              setDataHora(e.target.value);
+              if (e.target.value) setPublicarAgora(false);
+            }}
+            disabled={enviando || publicarAgora}
             className="w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-sm sm:w-1/2"
           />
+        </label>
+
+        <label className="flex cursor-pointer items-start gap-2 rounded-md bg-slate-50 px-2.5 py-2 text-sm ring-1 ring-slate-200">
+          <input
+            type="checkbox"
+            checked={publicarAgora}
+            onChange={(e) => {
+              setPublicarAgora(e.target.checked);
+              if (e.target.checked) setDataHora("");
+            }}
+            disabled={enviando}
+            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+          />
+          <span className="text-slate-700">
+            <strong>Publicar agora</strong>
+            <span className="block text-xs text-slate-500">
+              Sai no próximo ciclo do agendador (em até 5 minutos), sem escolher horário. Ao ligar, o agendamento é desligado.
+            </span>
+          </span>
         </label>
 
         <button
@@ -356,11 +393,40 @@ function ComporPost({
           disabled={enviando}
           className="w-full rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
         >
-          {enviando ? progresso ?? "Agendando…" : "Agendar publicação"}
+          {enviando ? progresso ?? "Agendando…" : publicarAgora ? "Publicar agora" : "Agendar publicação"}
         </button>
 
         {erro && <p className="text-xs text-red-600">{erro}</p>}
       </div>
+
+      {sucesso && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setSucesso(null)}
+        >
+          <div className="w-full max-w-sm rounded-xl2 bg-white p-6 text-center shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-green-100 text-2xl text-green-600">✓</div>
+            <h3 className="text-base font-semibold text-slate-900">
+              {sucesso === "agora" ? "Enviada pra publicar!" : "Publicação agendada com sucesso!"}
+            </h3>
+            <p className="mt-1 text-sm text-slate-500">
+              {sucesso === "agora"
+                ? "Ela sai no próximo ciclo do agendador, em até 5 minutos."
+                : "Ela aparece na lista de agendadas logo abaixo."}
+            </p>
+            <button
+              type="button"
+              autoFocus
+              onClick={() => setSucesso(null)}
+              className="mt-4 w-full rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
