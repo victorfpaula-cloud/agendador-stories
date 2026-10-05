@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { enviarMidiaDireto } from "@/lib/uploadDireto";
 import { gerarThumbnail } from "@/lib/thumbnail";
+import { confirmarProporcaoFeed } from "@/lib/proporcao";
 import { marcarComoGeradaPorIA, prepararImagem } from "@/lib/imagemCliente";
 import ChaveFacebook from "../ChaveFacebook";
 import type { FeedPostComDetalhes, FeedPostStatus } from "@/types/database";
@@ -233,6 +234,7 @@ function ComporPost({
       return;
     }
     const foiAgora = publicarAgora;
+    if (!(await confirmarProporcaoFeed(files))) return;
 
     setEnviando(true);
     try {

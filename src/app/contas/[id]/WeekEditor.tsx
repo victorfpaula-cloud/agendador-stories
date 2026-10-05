@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { DIAS_SEMANA } from "@/lib/days";
 import { prepararImagem } from "@/lib/imagemCliente";
+import { confirmarProporcaoStory } from "@/lib/proporcao";
 import { enviarMidiaDireto } from "@/lib/uploadDireto";
 import { gerarThumbnail } from "@/lib/thumbnail";
 import type { ScheduleSlot } from "@/types/database";
@@ -230,6 +231,7 @@ function LinhaSalva({
   }
 
   async function trocarMidia(file: File) {
+    if (!(await confirmarProporcaoStory([file]))) return;
     setCarregando(true);
     setErro(null);
     try {
@@ -345,6 +347,7 @@ function LinhaNova({
       setErro("Escolha o horário e a mídia antes de salvar.");
       return;
     }
+    if (!(await confirmarProporcaoStory([file]))) return;
     setCarregando(true);
     setErro(null);
 

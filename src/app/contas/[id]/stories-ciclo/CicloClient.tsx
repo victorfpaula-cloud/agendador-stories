@@ -5,6 +5,7 @@ import { DIAS_SEMANA } from "@/lib/days";
 import { prepararImagem } from "@/lib/imagemCliente";
 import { enviarMidiaDireto } from "@/lib/uploadDireto";
 import { gerarThumbnail } from "@/lib/thumbnail";
+import { confirmarProporcaoStory } from "@/lib/proporcao";
 import type { StoryCicloCategoria, StoryCicloHorario, StoryCicloItem } from "@/types/database";
 
 export type CategoriaComHorarios = StoryCicloCategoria & { story_ciclo_horario: StoryCicloHorario[] };
@@ -333,6 +334,7 @@ function CategoriaCard({
 
   async function enviarArquivos(files: FileList | null) {
     if (!files || files.length === 0) return;
+    if (!(await confirmarProporcaoStory(Array.from(files)))) return;
     setEnviando(true);
     setErro(null);
     try {
