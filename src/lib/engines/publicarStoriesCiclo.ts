@@ -129,19 +129,15 @@ export async function executarPublicarStoriesCiclo(admin: ReturnType<typeof crea
         mediaType: item.media_type,
       });
 
-      // Publicou com sucesso? Apaga só a CÓPIA do arquivo original (que
-      // ficou reservada pra esse Story específico) — o item continua no
-      // balde da categoria, pronto pra ser escolhido de novo quando a vez
-      // dele voltar. A miniatura continua representando o Story na tela.
-      if (item.media_path) {
-        try {
-          await admin.storage.from("story-media").remove([item.media_path]);
-          await admin.from("story_ciclo_posts").update({ media_url: null, media_path: null }).eq("id", item.id);
-        } catch {
-          // Ignorado de propósito — o pior caso é um arquivo esquecido no
-          // bucket, não um Story com status errado.
-        }
-      }
+      // Publicou com sucesso: só "solta" o Story do arquivo. O arquivo em si
+      // NUNCA é apagado aqui — media_path é o MESMO arquivo do item da
+      // categoria (o Story não tem cópia própria), e o item volta a ser
+      // usado quando a vez dele chegar no ciclo. Antes, esse trecho apagava
+      // o arquivo achando que era uma cópia; resultado: cada imagem só
+      // funcionava uma vez e, no 2º ciclo, o Instagram recebia um link morto
+      // ("Only photo or video can be accepted as media type") — corrigido em
+      // 05/10/2026. A miniatura continua representando o Story na tela.
+      await admin.from("story_ciclo_posts").update({ media_url: null, media_path: null }).eq("id", item.id);
 
       resultados.push({ postId: item.id, status: "success" });
     } catch (err) {
@@ -184,10 +180,7 @@ async function podarPostsAntigos(admin: ReturnType<typeof createAdminClient>): P
 
     if (error) return 0;
 
-    const paths = (antigos as { media_path: string | null }[]).map((p) => p.media_path).filter((p): p is string => !!p);
-    if (paths.length > 0) {
-      await admin.storage.from("story-media").remove(paths);
-    }
+    // Não apaga arquivo nenhum: o arquivo é do item da categoria (ver acima).
 
     return antigos.length;
   } catch {
