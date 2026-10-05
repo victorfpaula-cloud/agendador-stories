@@ -26,6 +26,29 @@ function formatarDataHoraSaoPaulo(iso: string): string {
 // vira 'error' de verdade e manda o e-mail.
 const LIMITE_TENTATIVAS = 3;
 
+// O arquivo existe de verdade? (Um HEAD no link público; erro de rede não
+// conta como "faltando" — só um 404/4xx do Storage.)
+async function arquivoExiste(url: string): Promise<boolean> {
+  try {
+    const res = await fetch(url, { method: "HEAD", signal: AbortSignal.timeout(8_000) });
+    return !(res.status >= 400 && res.status < 500);
+  } catch {
+    return true;
+  }
+}
+
+// Troca a imagem do Story pela próxima da fila da categoria (a mais tempo sem
+// uso, com arquivo existente) — função do banco trocar_item_story_ciclo.
+async function trocarPelaProxima(
+  admin: ReturnType<typeof createAdminClient>,
+  postId: string
+): Promise<{ media_url: string; media_path: string; media_type: StoryCicloPost["media_type"] } | null> {
+  const { data } = await admin.rpc("trocar_item_story_ciclo", { p_post_id: postId }).single<{ trocado: boolean }>();
+  if (!data?.trocado) return null;
+  const { data: post } = await admin.from("story_ciclo_posts").select("media_url, media_path, media_type").eq("id", postId).single();
+  return post && post.media_url ? (post as { media_url: string; media_path: string; media_type: StoryCicloPost["media_type"] }) : null;
+}
+
 export async function executarPublicarStoriesCiclo(admin: ReturnType<typeof createAdminClient>) {
   const agoraISO = new Date().toISOString();
 
@@ -106,6 +129,17 @@ export async function executarPublicarStoriesCiclo(admin: ReturnType<typeof crea
       continue;
     }
 
+    // Arquivo da imagem escolhida sumiu? Em vez de falhar, usa a próxima
+    // imagem da fila da categoria e publica no mesmo ciclo.
+    if (!(await arquivoExiste(item.media_url))) {
+      const nova = await trocarPelaProxima(admin, item.id);
+      if (!nova) {
+        await falharTentativa(item, conta, "A imagem escolhida perdeu o arquivo e não há outra imagem com arquivo nessa categoria.");
+        continue;
+      }
+      Object.assign(item, nova);
+    }
+
     try {
       const igMediaId = await publicarStory({
         igUserId: conta.ig_user_id,
@@ -142,6 +176,9 @@ export async function executarPublicarStoriesCiclo(admin: ReturnType<typeof crea
       resultados.push({ postId: item.id, status: "success" });
     } catch (err) {
       const msg = err instanceof MetaApiError || err instanceof Error ? err.message : "Erro desconhecido";
+      // O Instagram recusou a mídia em si ("Only photo or video...") — a
+      // próxima tentativa já usa a próxima imagem da fila.
+      if (/only photo or video/i.test(msg)) await trocarPelaProxima(admin, item.id);
       await falharTentativa(item, conta, msg);
     }
   }
