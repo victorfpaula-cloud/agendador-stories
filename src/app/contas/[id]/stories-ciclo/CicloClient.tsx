@@ -505,10 +505,21 @@ function CategoriaCard({
           {carregandoGaleria ? (
             <p className="text-xs text-slate-400">Carregando…</p>
           ) : itens && itens.length > 0 ? (
+            <>
+            {itens.some((i) => (i as StoryCicloItem & { arquivo_faltando?: boolean }).arquivo_faltando) && (
+              <p className="mb-2 rounded-md bg-red-50 px-2.5 py-1.5 text-xs text-red-700 ring-1 ring-red-200">
+                As imagens marcadas em vermelho perderam o arquivo e <strong>não entram mais no ciclo</strong>. Remova (×) e envie de novo.
+              </p>
+            )}
             <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
               {itens.map((item) => (
                 <div key={item.id} className="group relative">
                   <MiniaturaMidia thumbnailDataUrl={item.thumbnail_data_url} />
+                  {(item as StoryCicloItem & { arquivo_faltando?: boolean }).arquivo_faltando && (
+                    <span className="absolute inset-0 flex items-end justify-center rounded-md bg-red-600/30 pb-0.5 text-[9px] font-semibold text-white ring-2 ring-red-500">
+                      sem arquivo
+                    </span>
+                  )}
                   {!item.usado_em && (
                     <span className="absolute left-0.5 top-0.5 rounded bg-green-600/90 px-1 text-[9px] font-medium text-white">nova</span>
                   )}
@@ -523,6 +534,7 @@ function CategoriaCard({
                 </div>
               ))}
             </div>
+            </>
           ) : (
             <p className="text-xs text-slate-400">Nenhuma imagem ainda.</p>
           )}

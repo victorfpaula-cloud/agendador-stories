@@ -16,7 +16,23 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   if (error) {
     return NextResponse.json({ erro: error.message }, { status: 500 });
   }
-  return NextResponse.json({ itens: data ?? [] });
+
+  // Marca as imagens cujo arquivo já não existe no Storage (apagado por um
+  // erro antigo do motor, corrigido em 05/10/2026) — elas não entram mais no
+  // ciclo e o Victor precisa reenviar.
+  let existentes: Set<string> | null = null;
+  try {
+    const { data: arquivos } = await admin.storage.from("story-media").list(`ciclo/${params.id}`, { limit: 1000 });
+    if (arquivos) existentes = new Set(arquivos.map((a) => `ciclo/${params.id}/${a.name}`));
+  } catch {
+    existentes = null;
+  }
+  const itens = (data ?? []).map((i) => ({
+    ...i,
+    arquivo_faltando: existentes ? !existentes.has(i.media_path as string) : false,
+  }));
+
+  return NextResponse.json({ itens });
 }
 
 // Adiciona um ou mais arquivos já enviados ao Storage (ver
