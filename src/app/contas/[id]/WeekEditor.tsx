@@ -21,6 +21,17 @@ export type StoryEngineSlot = {
   diasSemana: number[]; // 1 = segunda ... 7 = domingo
 };
 
+// Um dia de um Agendamento Único (linhas do mesmo agendamento dividem grupo_id).
+export type UnicoLinha = {
+  id: string;
+  grupo_id: string;
+  dia: string; // "AAAA-MM-DD"
+  scheduled_at: string;
+  status: "pending" | "publishing" | "success" | "error";
+  error_message: string | null;
+  thumbnail_data_url: string | null;
+};
+
 const BUCKET_STORIES = "story-media";
 
 type StatusHoje = "success" | "error" | "pendente";
@@ -63,7 +74,9 @@ export default function WeekEditor({
   logsHoje,
   storyEngineSlots,
   storyEngineStatusHoje,
+  unicosIniciais,
 }: {
+  unicosIniciais: UnicoLinha[];
   accountId: string;
   initialSlots: ScheduleSlot[];
   diaHoje: number;
@@ -75,6 +88,7 @@ export default function WeekEditor({
   const [slots, setSlots] = useState<ScheduleSlot[]>(initialSlots);
   const [linhasExtras, setLinhasExtras] = useState<Record<number, number>>({});
   const [atualizando, setAtualizando] = useState(false);
+  const [unicos, setUnicos] = useState<UnicoLinha[]>(unicosIniciais);
 
   function atualizarAgora() {
     setAtualizando(true);
@@ -194,8 +208,179 @@ export default function WeekEditor({
             </section>
           );
         })}
+
+        <AgendamentoUnico
+          accountId={accountId}
+          unicos={unicos}
+          onCriado={(linhas) => setUnicos((u) => [...u, ...linhas])}
+          onCancelado={(grupoId) => setUnicos((u) => u.filter((l) => l.grupo_id !== grupoId || l.status !== "pending"))}
+        />
       </div>
     </div>
+  );
+}
+
+const fmtDia = (iso: string) => {
+  const d = new Date(`${iso}T12:00:00Z`);
+  return new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC", weekday: "short", day: "2-digit", month: "2-digit" }).format(d).replace(".", "");
+};
+const fmtHora = (iso: string) =>
+  new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
+
+// Nova "aba" ao lado do domingo: um Story com data/horário e de 1 a 7 dias
+// seguidos (posta uma vez por dia nesse horário e depois para).
+function AgendamentoUnico({
+  accountId,
+  unicos,
+  onCriado,
+  onCancelado,
+}: {
+  accountId: string;
+  unicos: UnicoLinha[];
+  onCriado: (linhas: UnicoLinha[]) => void;
+  onCancelado: (grupoId: string) => void;
+}) {
+  const [file, setFile] = useState<File | null>(null);
+  const [inputKey, setInputKey] = useState(0);
+  const [data, setData] = useState("");
+  const [hora, setHora] = useState("");
+  const [dias, setDias] = useState(1);
+  const [enviando, setEnviando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const [ok, setOk] = useState(false);
+
+  async function agendar() {
+    setErro(null);
+    setOk(false);
+    if (!file || !data || !hora) {
+      setErro("Escolha a mídia, a data e o horário.");
+      return;
+    }
+    if (!(await confirmarProporcaoStory([file]))) return;
+    setEnviando(true);
+    try {
+      const arquivoFinal = await prepararImagem(file);
+      const media = await enviarMidiaDireto(arquivoFinal, { bucket: BUCKET_STORIES, pasta: `unico/${accountId}` });
+      const thumbnailDataUrl = await gerarThumbnail(arquivoFinal);
+      const json = await chamarApi(`/api/accounts/${accountId}/story-unico`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ data, hora, dias, media: { ...media, thumbnailDataUrl } }),
+      });
+      onCriado(json.linhas as UnicoLinha[]);
+      setFile(null);
+      setInputKey((k) => k + 1);
+      setData("");
+      setHora("");
+      setDias(1);
+      setOk(true);
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Erro ao agendar.");
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  async function cancelar(grupoId: string) {
+    if (!confirm("Cancelar os dias que ainda não saíram desse agendamento?")) return;
+    try {
+      await chamarApi(`/api/story-unico/${grupoId}`, { method: "DELETE" });
+      onCancelado(grupoId);
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Erro ao cancelar.");
+    }
+  }
+
+  // Agrupa as linhas por agendamento.
+  const grupos = new Map<string, UnicoLinha[]>();
+  for (const l of unicos) grupos.set(l.grupo_id, [...(grupos.get(l.grupo_id) ?? []), l]);
+  const visiveis = Array.from(grupos.entries()).filter(([, ls]) =>
+    ls.some((l) => l.status === "pending" || l.status === "publishing" || l.status === "error")
+  );
+
+  return (
+    <section className="rounded-xl2 bg-white p-4 shadow-sm ring-1 ring-brand-200">
+      <h2 className="mb-1 font-semibold text-slate-900">Agendamento Único</h2>
+      <p className="mb-3 text-xs text-slate-500">
+        Um Story em uma data específica, repetido de 1 a 7 dias seguidos no mesmo horário. Depois disso, não posta mais.
+      </p>
+
+      <div className="space-y-2">
+        <input
+          key={inputKey}
+          type="file"
+          accept="image/*,video/*"
+          disabled={enviando}
+          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          className="block w-full text-xs text-slate-500 file:mr-2 file:rounded-md file:border-0 file:bg-brand-50 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-brand-700"
+        />
+        <div className="grid grid-cols-2 gap-2">
+          <label className="block text-xs text-slate-500">
+            Data
+            <input type="date" value={data} onChange={(e) => setData(e.target.value)} disabled={enviando} className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm" />
+          </label>
+          <label className="block text-xs text-slate-500">
+            Horário
+            <input type="time" value={hora} onChange={(e) => setHora(e.target.value)} disabled={enviando} className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm" />
+          </label>
+        </div>
+        <label className="block text-xs text-slate-500">
+          Quantos dias seguidos
+          <select value={dias} onChange={(e) => setDias(Number(e.target.value))} disabled={enviando} className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm">
+            {[1, 2, 3, 4, 5, 6, 7].map((n) => (
+              <option key={n} value={n}>
+                {n === 1 ? "1 dia (só nessa data)" : `${n} dias seguidos`}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button type="button" onClick={agendar} disabled={enviando} className="w-full rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60">
+          {enviando ? "Agendando…" : "Agendar"}
+        </button>
+        {erro && <p className="text-xs text-red-600">{erro}</p>}
+        {ok && <p className="text-xs text-green-700">✓ Agendado! Aparece na lista abaixo.</p>}
+      </div>
+
+      {visiveis.length > 0 && (
+        <div className="mt-4 space-y-2 border-t border-slate-100 pt-3">
+          <p className="text-xs font-medium text-slate-600">Agendamentos únicos</p>
+          {visiveis.map(([grupoId, ls]) => {
+            const ordenadas = [...ls].sort((a, b) => a.dia.localeCompare(b.dia));
+            const postados = ordenadas.filter((l) => l.status === "success").length;
+            const temPendente = ordenadas.some((l) => l.status === "pending");
+            return (
+              <div key={grupoId} className="rounded-lg bg-slate-50 p-2 text-xs text-slate-600 ring-1 ring-slate-200">
+                <div className="flex items-center gap-2">
+                  {ordenadas[0].thumbnail_data_url && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={ordenadas[0].thumbnail_data_url} alt="" className="h-10 w-7 rounded object-cover" />
+                  )}
+                  <div className="flex-1">
+                    <strong>{fmtHora(ordenadas[0].scheduled_at)}</strong> · {ordenadas.length} {ordenadas.length === 1 ? "dia" : "dias"} · {postados} de {ordenadas.length} postados
+                  </div>
+                  {temPendente && (
+                    <button onClick={() => cancelar(grupoId)} className="text-red-600 underline">
+                      cancelar
+                    </button>
+                  )}
+                </div>
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {ordenadas.map((l) => (
+                    <span
+                      key={l.id}
+                      title={l.error_message ?? undefined}
+                      className={`rounded-full px-2 py-0.5 ${l.status === "success" ? "bg-green-100 text-green-700" : l.status === "error" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}
+                    >
+                      {fmtDia(l.dia)}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
   );
 }
 

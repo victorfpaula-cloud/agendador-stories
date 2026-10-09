@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { agoraEmSaoPaulo } from "@/lib/days";
 import type { Account, PublishLog, ScheduleSlot } from "@/types/database";
-import WeekEditor from "./WeekEditor";
+import WeekEditor, { type UnicoLinha } from "./WeekEditor";
 import DuplicarRotina from "./DuplicarRotina";
 import ContaTabs from "./ContaTabs";
 import GerarRelatorio from "./GerarRelatorio";
@@ -102,6 +102,15 @@ export default async function ContaPage({ params }: { params: { id: string } }) 
     }
   }
 
+  // Agendamento Único: dias ainda por sair (ou com erro) de cada agendamento.
+  const { data: unicos } = await admin
+    .from("story_unico_posts")
+    .select("id, grupo_id, dia, scheduled_at, status, error_message, thumbnail_data_url")
+    .eq("account_id", params.id)
+    .in("status", ["pending", "publishing", "error", "success"])
+    .gte("scheduled_at", new Date(Date.now() - 3 * 86_400_000).toISOString())
+    .order("scheduled_at", { ascending: true });
+
   return (
     <main className="mx-auto max-w-6xl px-4 py-10">
       <div className="mb-8 flex items-start justify-between gap-3">
@@ -152,6 +161,7 @@ export default async function ContaPage({ params }: { params: { id: string } }) 
         logsHoje={logsHoje}
         storyEngineSlots={storyEngineSlots}
         storyEngineStatusHoje={storyEngineStatusHoje}
+        unicosIniciais={(unicos ?? []) as UnicoLinha[]}
       />
     </main>
   );
