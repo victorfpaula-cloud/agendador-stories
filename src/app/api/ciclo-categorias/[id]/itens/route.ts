@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { copiarParaBackup } from "@/lib/backupCiclo";
 import type { MediaType } from "@/types/database";
 
 // Galeria de uma categoria — usada quando a tela expande uma categoria pra
@@ -74,5 +75,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (error) {
     return NextResponse.json({ erro: error.message }, { status: 500 });
   }
+  // Cópia de segurança imediata de cada arquivo novo (best-effort).
+  for (const it of itens) {
+    if (it.path) await copiarParaBackup(admin, it.path).catch(() => false);
+  }
+
   return NextResponse.json({ itens: data ?? [] });
 }

@@ -143,3 +143,11 @@ $$;
 create index story_ciclo_horario_category_idx on public.story_ciclo_horario (category_id);
 create index story_ciclo_item_category_idx on public.story_ciclo_item (category_id);
 create index story_ciclo_posts_status_idx on public.story_ciclo_posts (status, scheduled_at);
+
+-- Cópia de segurança das imagens do Story Engine (16/10/2026). Um erro antigo
+-- do motor apagava a imagem do item depois de publicar; agora cada imagem tem
+-- uma cópia no bucket privado story-backup (mesmo caminho) e as funções abaixo
+-- dizem o que falta copiar / o que dá pra restaurar. Aplicado em produção.
+-- (bucket: insert into storage.buckets (id, name, public) values ('story-backup','story-backup',false);)
+-- itens_ciclo_sem_backup(limite)    -> itens com arquivo no story-media e sem cópia
+-- itens_ciclo_para_restaurar(limite) -> itens sem arquivo no story-media mas COM cópia

@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { agoraEmSaoPaulo } from "@/lib/days";
+import { manterBackupDoCiclo } from "@/lib/backupCiclo";
 import { carregarDiasFechados, chaveDiaFechado } from "@/lib/diasFechados";
 
 // Geração de Stories do Story Engine (banco de imagens por categoria, gira
@@ -13,6 +14,9 @@ import { carregarDiasFechados, chaveDiaFechado } from "@/lib/diasFechados";
 // combinado /api/cron/gerar-tudo.
 export async function executarGeracaoStoriesCiclo(admin: ReturnType<typeof createAdminClient>) {
   const { dataISO, diaSemanaIso } = agoraEmSaoPaulo();
+
+  // Antes de gerar: restaura o que sumiu (se tiver cópia) e copia o que falta.
+  const backup = await manterBackupDoCiclo(admin);
 
   const { data: horarios, error: erroHorarios } = await admin
     .from("story_ciclo_horario")
@@ -63,5 +67,5 @@ export async function executarGeracaoStoriesCiclo(admin: ReturnType<typeof creat
     resultados[h.id] = { gerado: !!data?.gerado, motivo: data?.motivo ?? "erro_desconhecido" };
   }
 
-  return { dataISO, diaSemanaIso, resultados };
+  return { dataISO, diaSemanaIso, resultados, backup };
 }

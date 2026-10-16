@@ -2,6 +2,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { publicarStory, MetaApiError } from "@/lib/meta";
 import { crossPostStoryFacebook } from "@/lib/crossPostStoryFacebook";
 import { enviarEmail } from "@/lib/email";
+import { restaurarDoBackup } from "@/lib/backupCiclo";
 import { MENSAGEM_DIA_FECHADO, carregarDiasFechados, chaveDiaFechado } from "@/lib/diasFechados";
 import type { Account, StoryCicloPost } from "@/types/database";
 
@@ -131,7 +132,7 @@ export async function executarPublicarStoriesCiclo(admin: ReturnType<typeof crea
 
     // Arquivo da imagem escolhida sumiu? Em vez de falhar, usa a próxima
     // imagem da fila da categoria e publica no mesmo ciclo.
-    if (!(await arquivoExiste(item.media_url))) {
+    if (!(await arquivoExiste(item.media_url)) && !(item.media_path && (await restaurarDoBackup(admin, item.media_path)))) {
       const nova = await trocarPelaProxima(admin, item.id);
       if (!nova) {
         await falharTentativa(item, conta, "A imagem escolhida perdeu o arquivo e não há outra imagem com arquivo nessa categoria.");
