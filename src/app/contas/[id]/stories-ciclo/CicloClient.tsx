@@ -362,6 +362,34 @@ function CategoriaCard({
     }
   }
 
+  // Acha imagens repetidas (pela aparência) e, se confirmar, remove as sobras.
+  async function removerDuplicadas() {
+    try {
+      const previa = await chamarApi(`/api/ciclo-categorias/${categoria.id}/duplicadas`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmar: false }),
+      });
+      if (!previa.duplicadas) {
+        alert("Nenhuma imagem duplicada nessa categoria.");
+        return;
+      }
+      const msg =
+        `Achei ${previa.duplicadas} imagem(ns) duplicada(s)` +
+        (previa.semArquivo ? ` (${previa.semArquivo} delas sem arquivo)` : "") +
+        ". Vou manter a melhor de cada grupo e remover as outras. Continuar?";
+      if (!confirm(msg)) return;
+      await chamarApi(`/api/ciclo-categorias/${categoria.id}/duplicadas`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmar: true }),
+      });
+      window.location.reload();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Erro ao remover duplicadas.");
+    }
+  }
+
   async function apagarItem(item: StoryCicloItem) {
     if (!confirm("Remover essa imagem da categoria?")) return;
     try {
@@ -503,6 +531,10 @@ function CategoriaCard({
             />
             {enviando && <p className="mt-1 text-xs text-slate-400">{progresso}</p>}
           </label>
+
+          <button type="button" onClick={removerDuplicadas} className="mb-2 text-xs font-medium text-brand-600 hover:text-brand-700">
+            🧹 Remover imagens duplicadas
+          </button>
 
           {carregandoGaleria ? (
             <p className="text-xs text-slate-400">Carregando…</p>
