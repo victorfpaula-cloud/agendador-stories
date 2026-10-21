@@ -8,7 +8,13 @@ type Admin = ReturnType<typeof createAdminClient>;
 const BUCKET = "story-media";
 const BACKUP = "story-backup";
 
+// DESLIGADO por padrão (20/10/2026): as cópias dobraram o uso de Storage e o
+// projeto estourou o limite de 1 GB do plano gratuito (Supabase bloqueou tudo).
+// Só ligue com BACKUP_CICLO=1 depois de ter espaço de sobra (plano Pro).
+const LIGADO = () => process.env.BACKUP_CICLO === "1";
+
 export async function copiarParaBackup(admin: Admin, path: string): Promise<boolean> {
+  if (!LIGADO()) return false;
   const { error } = await admin.storage.from(BUCKET).copy(path, path, { destinationBucket: BACKUP });
   return !error;
 }
@@ -23,6 +29,7 @@ export async function restaurarDoBackup(admin: Admin, path: string): Promise<boo
 export async function manterBackupDoCiclo(admin: Admin): Promise<{ copiados: number; restaurados: number }> {
   let copiados = 0;
   let restaurados = 0;
+  if (!LIGADO()) return { copiados, restaurados };
   try {
     const { data: faltam } = await admin.rpc("itens_ciclo_sem_backup", { p_limite: 15 });
     for (const r of (faltam ?? []) as { media_path: string }[]) {
