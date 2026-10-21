@@ -74,7 +74,8 @@ export async function executarPublicarStoriesUnico(admin: ReturnType<typeof crea
       await admin.from("story_unico_posts").update({ status: esgotou ? "error" : "pending", tentativas, error_message: msg }).eq("id", item.id);
       resultados.push({ id: item.id, status: esgotou ? "error" : "pending", detalhe: msg });
       if (!esgotou) return;
-      await enviarEmail({
+      // Conta pausada de propósito: não faz sentido avisar por e-mail.
+      if (conta.is_active) await enviarEmail({
         assunto: `Erro ao publicar Story (Agendamento Único) — ${conta.name}`,
         corpo: `A conta "${conta.name}" teve um erro ao publicar um Story do Agendamento Único (dia ${item.dia}), depois de ${tentativas} tentativas.\n\nErro: ${msg}\n\nPublica esse Story manualmente.`,
       });

@@ -136,7 +136,8 @@ export async function executarPublicarFeed(admin: ReturnType<typeof createAdminC
 
       if (esgotou) {
         algumErroDefinitivo = true;
-        falhasPorConta.push({ conta: conta.name, mensagem });
+        // Conta pausada de propósito: não entra no e-mail de erro.
+        if (conta.is_active) falhasPorConta.push({ conta: conta.name, mensagem });
       } else {
         aindaPendente = true;
       }

@@ -65,7 +65,8 @@ export async function executarPublicarStoriesDrive(admin: ReturnType<typeof crea
 
     resultados.push({ storyId: item.id, status: esgotou ? "error" : "pending", detalhe: msg });
 
-    if (!esgotou) return;
+    // Conta pausada de propósito: não faz sentido avisar por e-mail.
+    if (!esgotou || !conta.is_active) return;
 
     await enviarEmail({
       assunto: `Erro ao publicar Story automático (Drive) — ${conta.name}`,

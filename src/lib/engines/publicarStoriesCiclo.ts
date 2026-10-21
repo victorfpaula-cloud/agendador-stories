@@ -83,7 +83,8 @@ export async function executarPublicarStoriesCiclo(admin: ReturnType<typeof crea
 
     resultados.push({ postId: item.id, status: esgotou ? "error" : "pending", detalhe: msg });
 
-    if (!esgotou) return;
+    // Conta pausada de propósito: não faz sentido avisar por e-mail.
+    if (!esgotou || !conta.is_active) return;
 
     await enviarEmail({
       assunto: `Erro ao publicar Story do Story Engine — ${conta.name}`,
