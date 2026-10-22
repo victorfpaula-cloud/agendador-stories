@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Account, DriveConfig, DriveExecucao } from "@/types/database";
 import ContaTabs from "../../ContaTabs";
+import ChaveFacebook from "../../ChaveFacebook";
 import DriveConfigClient from "./DriveConfigClient";
 
 // Sub-módulo do Drive (passo 6 = configuração, passo 7 = o robô de verdade)
@@ -55,6 +56,16 @@ export default async function DriveConfigDaContaPage({ params }: { params: { id:
           Não consegui ler a configuração ({error.message}).
         </div>
       )}
+
+      <div className="mb-6">
+        <ChaveFacebook
+          accountId={params.id}
+          campo="cross_post_facebook"
+          titulo="Cross-post pro Facebook"
+          descricao="Publicar automaticamente também no Feed da Página do Facebook vinculada (foto, Reels e carrossel só de fotos). Vale pro AutoFeed e pras Publicações da conta."
+          valorInicial={(conta as Account).cross_post_facebook}
+        />
+      </div>
 
       <DriveConfigClient
         accountId={params.id}
