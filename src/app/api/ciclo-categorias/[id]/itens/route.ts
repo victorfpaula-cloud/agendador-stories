@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { copiarParaBackup } from "@/lib/backupCiclo";
+import { ajustarParaStory } from "@/lib/storyProporcao";
 import type { MediaType } from "@/types/database";
+
+export const maxDuration = 60;
 
 // Galeria de uma categoria — usada quando a tela expande uma categoria pra
 // gerenciar as imagens dela (a lista de categorias em si não carrega isso
@@ -60,6 +63,21 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
   if (itens.some((i) => !i.url || !i.path || !i.mediaType)) {
     return NextResponse.json({ erro: "Um ou mais arquivos ficaram incompletos — tente enviar de novo." }, { status: 400 });
+  }
+
+  // Foto fora de 9:16 é cortada no centro pra ocupar o Story inteiro.
+  for (let i = 0; i < itens.length; i += 3) {
+    await Promise.all(
+      itens.slice(i, i + 3).map(async (it) => {
+        if (it.mediaType !== "IMAGE" || !it.path) return;
+        const ajustado = await ajustarParaStory(admin, it.path);
+        if (ajustado) {
+          it.url = ajustado.url;
+          it.path = ajustado.path;
+          it.thumbnailDataUrl = ajustado.thumbnailDataUrl;
+        }
+      })
+    );
   }
 
   const linhas = itens.map((i) => ({
