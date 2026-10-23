@@ -4,6 +4,8 @@ import { enviarMidiaBuffer } from "@/lib/storage";
 import {
   NOMES_MES,
   baixarArquivoDrive,
+  lerTextoGoogleDoc,
+  MIME_GOOGLE_DOC,
   baixarThumbnailDrive,
   encontrarSubpasta,
   extrairIdDaPasta,
@@ -129,7 +131,8 @@ export async function executarLeituraDrive(
 
     const arquivos = await listarArquivosDaPasta(accessToken, pastaDiaId);
     const arquivosMidia = arquivos.filter((a) => a.mimeType.startsWith("image/") || a.mimeType.startsWith("video/"));
-    const arquivosPdf = arquivos.filter((a) => a.mimeType === "application/pdf");
+    // Legenda pode vir em PDF ou em Google Doc (a ordem alfabética decide qual).
+    const arquivosLegenda = arquivos.filter((a) => a.mimeType === "application/pdf" || a.mimeType === MIME_GOOGLE_DOC);
 
     if (arquivosMidia.length === 0) {
       const detalhe = `Pasta do dia ${diaStr}/${mesStr} encontrada, mas sem nenhuma foto/vídeo dentro.`;
@@ -149,15 +152,18 @@ export async function executarLeituraDrive(
         ? "REELS"
         : "IMAGE";
 
-    // Legenda: texto do primeiro PDF encontrado na pasta do dia. Sem PDF =
-    // legenda vazia, não é erro (o post sai sem legenda).
+    // Legenda: texto do primeiro PDF ou Google Doc encontrado na pasta do
+    // dia. Sem nenhum = legenda vazia, não é erro (o post sai sem legenda).
     let caption = "";
-    if (arquivosPdf.length > 0) {
+    if (arquivosLegenda.length > 0) {
+      const arquivoLegenda = arquivosLegenda[0];
       try {
-        const bufferPdf = await baixarArquivoDrive(accessToken, arquivosPdf[0].id);
-        caption = await extrairTextoPdf(bufferPdf);
+        caption =
+          arquivoLegenda.mimeType === MIME_GOOGLE_DOC
+            ? await lerTextoGoogleDoc(accessToken, arquivoLegenda.id)
+            : await extrairTextoPdf(await baixarArquivoDrive(accessToken, arquivoLegenda.id));
       } catch {
-        // Falha ao ler o PDF não deve impedir o post de sair — melhor
+        // Falha ao ler a legenda não deve impedir o post de sair — melhor
         // publicar sem legenda do que não publicar nada.
         caption = "";
       }

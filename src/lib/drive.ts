@@ -203,6 +203,24 @@ export async function baixarArquivoDrive(accessToken: string, fileId: string): P
   return Buffer.from(await res.arrayBuffer());
 }
 
+export const MIME_GOOGLE_DOC = "application/vnd.google-apps.document";
+
+// Lê o texto de um Google Doc (arquivo nativo do Google, sem baixar bytes:
+// o Drive só deixa "exportar" esse tipo). Sai como texto puro, com a mesma
+// quebra de linha do documento.
+export async function lerTextoGoogleDoc(accessToken: string, fileId: string): Promise<string> {
+  const res = await fetch(
+    `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=${encodeURIComponent("text/plain")}&supportsAllDrives=true`,
+    { headers: { Authorization: `Bearer ${accessToken}` }, cache: "no-store" }
+  );
+
+  if (!res.ok) {
+    throw new Error(`Falha ao ler o Google Doc (HTTP ${res.status}).`);
+  }
+
+  return (await res.text()).replace(/^\uFEFF/, "").replace(/\r\n/g, "\n").trim();
+}
+
 export const NOMES_MES = [
   "Janeiro",
   "Fevereiro",
