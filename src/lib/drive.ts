@@ -150,6 +150,31 @@ export async function encontrarSubpasta(
   return encontrada?.id ?? null;
 }
 
+// Pasta do dia: aceita o nome exato ("24") e também variações com algo a
+// mais depois do número ("24 (novo)", "24 - sábado"). Se houver mais de uma,
+// prefere a de nome exato; senão a mais recentemente alterada. Nunca casa
+// "2" com "24" — o número tem que ser o dia inteiro.
+export async function encontrarPastaDoDia(
+  accessToken: string,
+  pastaMesId: string,
+  dia: string
+): Promise<string | null> {
+  const q = `'${pastaMesId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
+  const json = await chamarDriveApi(
+    accessToken,
+    `files?q=${encodeURIComponent(q)}&fields=files(id,name,modifiedTime)&pageSize=100&supportsAllDrives=true&includeItemsFromAllDrives=true`
+  );
+  const pastas = (json.files ?? []) as { id: string; name: string; modifiedTime?: string }[];
+  const numero = String(Number(dia));
+  const casa = (nome: string) => new RegExp(`^0*${numero}(?!\\d)`).test(nome.trim());
+  const candidatas = pastas.filter((p) => casa(p.name));
+  if (candidatas.length === 0) return null;
+  const exata = candidatas.find((p) => normalizarNomeDePasta(p.name) === normalizarNomeDePasta(dia));
+  if (exata) return exata.id;
+  candidatas.sort((a, b) => (b.modifiedTime ?? "").localeCompare(a.modifiedTime ?? ""));
+  return candidatas[0].id;
+}
+
 // Lista os arquivos (não-pastas) dentro de uma pasta, em ordem alfabética
 // pelo nome — essa ordem vira a ordem do carrossel quando houver mais de
 // uma mídia, e também decide qual PDF é "o" PDF quando houver mais de um.

@@ -8,6 +8,7 @@ import {
   MIME_GOOGLE_DOC,
   baixarThumbnailDrive,
   encontrarSubpasta,
+  encontrarPastaDoDia,
   extrairIdDaPasta,
   listarArquivosDaPasta,
   obterAccessToken,
@@ -121,7 +122,7 @@ export async function executarLeituraDrive(
       return { resultado: "sem_pasta" };
     }
 
-    const pastaDiaId = await encontrarSubpasta(accessToken, pastaMesId, diaStr);
+    const pastaDiaId = await encontrarPastaDoDia(accessToken, pastaMesId, diaStr);
 
     if (!pastaDiaId) {
       // Normal e esperado — dia sem pasta é dia sem post, não é erro.
