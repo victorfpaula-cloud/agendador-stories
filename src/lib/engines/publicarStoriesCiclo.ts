@@ -51,6 +51,9 @@ async function trocarPelaProxima(
   return post && post.media_url ? (post as { media_url: string; media_path: string; media_type: StoryCicloPost["media_type"] }) : null;
 }
 
+// Tolerância pra publicar atrasado (mesma ideia dos Stories semanais).
+const TOLERANCIA_ATRASO_MS = 2 * 60 * 60 * 1000;
+
 export async function executarPublicarStoriesCiclo(admin: ReturnType<typeof createAdminClient>) {
   const agoraISO = new Date().toISOString();
 
@@ -108,6 +111,19 @@ export async function executarPublicarStoriesCiclo(admin: ReturnType<typeof crea
         .eq("status", "pending");
       if (item.item_id) await admin.from("story_ciclo_item").update({ usado_em: null }).eq("id", item.item_id);
       resultados.push({ postId: item.id, status: "fechado" });
+      continue;
+    }
+
+    // Passou muito do horário (ex.: projeto parado, falha de geração): não
+    // publica fora de hora. Cancela e devolve a imagem pra fila.
+    if (Date.now() - new Date(item.scheduled_at).getTime() > TOLERANCIA_ATRASO_MS) {
+      await admin
+        .from("story_ciclo_posts")
+        .update({ status: "error", error_message: "Passou mais de 2 horas do horário — não foi publicado fora de hora." })
+        .eq("id", item.id)
+        .eq("status", "pending");
+      if (item.item_id) await admin.from("story_ciclo_item").update({ usado_em: null }).eq("id", item.item_id);
+      resultados.push({ postId: item.id, status: "atrasado" });
       continue;
     }
 
