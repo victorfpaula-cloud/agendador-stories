@@ -12,15 +12,22 @@ import { carregarDiasFechados, chaveDiaFechado } from "@/lib/diasFechados";
 // frequência. Extraído de /api/cron/gerar-stories-ciclo pra poder ser
 // chamado tanto pela rota individual (debug manual) quanto pelo cron
 // combinado /api/cron/gerar-tudo.
+const MARGEM_MINUTOS = 30;
+
+function minutosDoDia(hhmm: string): number {
+  const [h, m] = hhmm.split(":");
+  return Number(h) * 60 + Number(m);
+}
+
 export async function executarGeracaoStoriesCiclo(admin: ReturnType<typeof createAdminClient>) {
-  const { dataISO, diaSemanaIso } = agoraEmSaoPaulo();
+  const { dataISO, diaSemanaIso, horaMinuto } = agoraEmSaoPaulo();
 
   // Antes de gerar: restaura o que sumiu (se tiver cópia) e copia o que falta.
   const backup = await manterBackupDoCiclo(admin);
 
   const { data: horarios, error: erroHorarios } = await admin
     .from("story_ciclo_horario")
-    .select("id, category_id")
+    .select("id, category_id, horario")
     .eq("is_active", true);
 
   if (erroHorarios) {
@@ -52,9 +59,15 @@ export async function executarGeracaoStoriesCiclo(admin: ReturnType<typeof creat
 
   const resultados: Record<string, { gerado: boolean; motivo: string }> = {};
 
-  for (const h of (horarios ?? []) as { id: string; category_id: string }[]) {
+  for (const h of (horarios ?? []) as { id: string; category_id: string; horario: string }[]) {
     const diasSemana = diasSemanaPorCategoria.get(h.category_id);
     if (!diasSemana?.includes(diaSemanaIso)) continue;
+    // Horário que já passou hoje (mais de 30 min atrás) não gera Story: o
+    // publicador mandaria na hora, fora do horário combinado.
+    if (minutosDoDia(h.horario) < minutosDoDia(horaMinuto) - MARGEM_MINUTOS) {
+      resultados[h.id] = { gerado: false, motivo: "horario_ja_passou" };
+      continue;
+    }
     if (fechados.has(chaveDiaFechado(contaPorCategoria.get(h.category_id) ?? "", dataISO))) {
       resultados[h.id] = { gerado: false, motivo: "dia_fechado" };
       continue;

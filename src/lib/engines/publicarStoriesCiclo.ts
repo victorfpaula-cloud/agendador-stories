@@ -1,3 +1,4 @@
+import { agoraEmSaoPaulo } from "@/lib/days";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { publicarStory, MetaApiError } from "@/lib/meta";
 import { crossPostStoryFacebook } from "@/lib/crossPostStoryFacebook";
@@ -197,18 +198,24 @@ export async function executarPublicarStoriesCiclo(admin: ReturnType<typeof crea
   };
 }
 
-// Mesmo padrão do AutoStory: só guarda os últimos N publicados com sucesso
-// na tela, pra não crescer sem limite.
-const LIMITE_POSTS_PUBLICADOS = 15;
+// Só guarda os Stories publicados dos últimos dias na tela, pra não crescer
+// sem limite. Poda por DATA, nunca por quantidade: antes mantinha só os 15
+// últimos de todas as contas, e com isso os Stories de hoje já publicados
+// eram apagados à noite — o gerador achava que o horário ainda não tinha
+// Story no dia e publicava tudo de novo (bug de 23/10/2026, Stop Bike).
+const DIAS_PARA_GUARDAR = 3;
 
 async function podarPostsAntigos(admin: ReturnType<typeof createAdminClient>): Promise<number> {
   try {
+    const limite = new Date(`${agoraEmSaoPaulo().dataISO}T12:00:00Z`);
+    limite.setUTCDate(limite.getUTCDate() - DIAS_PARA_GUARDAR);
+
     const { data: antigos } = await admin
       .from("story_ciclo_posts")
-      .select("id, media_path")
+      .select("id")
       .eq("status", "success")
-      .order("published_at", { ascending: false })
-      .range(LIMITE_POSTS_PUBLICADOS, LIMITE_POSTS_PUBLICADOS + 199);
+      .lt("dia", limite.toISOString().slice(0, 10))
+      .limit(200);
 
     if (!antigos || antigos.length === 0) return 0;
 
