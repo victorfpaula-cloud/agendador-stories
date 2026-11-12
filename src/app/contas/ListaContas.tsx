@@ -325,7 +325,7 @@ function ContaCard({
         </div>
       )}
 
-      <ResumoDoDiaPainel resumo={resumo} diaHoje={diaHoje} />
+      <ResumoDoDiaPainel resumo={resumo} engine={storyEngineHoje} diaHoje={diaHoje} />
 
       <div className="mt-4 flex items-center gap-3 border-t border-slate-100 pt-3">
         <button
@@ -360,13 +360,26 @@ function ContaCard({
   );
 }
 
-// Miniquadro com o resumo de hoje: quantos horários tem no dia, quantos já
-// foram publicados e quantos deram erro, com uma barrinha que vai
-// enchendo conforme o dia avança. Como sempre calcula em cima do dia atual
-// (via agoraEmSaoPaulo no servidor), zera sozinho na virada da meia-noite —
-// não precisa de nenhuma lógica extra de "reset".
-function ResumoDoDiaPainel({ resumo, diaHoje }: { resumo: ResumoDoDia; diaHoje: number }) {
-  const { total, postados, erros } = resumo;
+// Miniquadro com o resumo de hoje: uma barra só que soma tudo do dia —
+// verde = Stories agendados (semanais) já postados, roxo = Story Engine já
+// postado, vermelho = erros dos agendados. Como sempre calcula em cima do dia
+// atual (via agoraEmSaoPaulo no servidor), zera sozinho na virada da
+// meia-noite — não precisa de nenhuma lógica extra de "reset".
+function ResumoDoDiaPainel({
+  resumo,
+  engine,
+  diaHoje,
+}: {
+  resumo: ResumoDoDia;
+  engine: ResumoStoryEngine | undefined;
+  diaHoje: number;
+}) {
+  const agendados = resumo.total;
+  const engineTotal = engine?.agendados ?? 0;
+  const total = agendados + engineTotal;
+  const postadosAgendados = resumo.postados;
+  const postadosEngine = engine?.postados ?? 0;
+  const erros = resumo.erros;
 
   if (total === 0) {
     return (
@@ -376,8 +389,11 @@ function ResumoDoDiaPainel({ resumo, diaHoje }: { resumo: ResumoDoDia; diaHoje: 
     );
   }
 
-  const pctPostado = Math.min(100, Math.round((postados / total) * 100));
-  const pctErro = Math.min(100 - pctPostado, Math.round((erros / total) * 100));
+  const pct = (n: number) => Math.min(100, (n / total) * 100);
+  const pctVerde = pct(postadosAgendados);
+  const pctRoxo = Math.min(100 - pctVerde, pct(postadosEngine));
+  const pctErro = Math.min(100 - pctVerde - pctRoxo, pct(erros));
+  const postados = postadosAgendados + postadosEngine;
 
   return (
     <div className="mt-3 rounded-lg bg-slate-50 px-2.5 py-2 text-xs">
@@ -389,9 +405,16 @@ function ResumoDoDiaPainel({ resumo, diaHoje }: { resumo: ResumoDoDia; diaHoje: 
         </span>
       </div>
       <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-slate-200">
-        <div className="h-full bg-green-500 transition-all" style={{ width: `${pctPostado}%` }} />
+        <div className="h-full bg-green-500 transition-all" style={{ width: `${pctVerde}%` }} />
+        <div className="h-full bg-violet-600 transition-all" style={{ width: `${pctRoxo}%` }} />
         <div className="h-full bg-red-500 transition-all" style={{ width: `${pctErro}%` }} />
       </div>
+      {agendados > 0 && engineTotal > 0 && (
+        <div className="mt-1.5 flex gap-3 text-[10px] text-slate-400">
+          <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-green-500" />{postadosAgendados}/{agendados} agendados</span>
+          <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-violet-600" />{postadosEngine}/{engineTotal} Story Engine</span>
+        </div>
+      )}
     </div>
   );
 }

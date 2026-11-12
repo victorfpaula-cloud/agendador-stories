@@ -39,17 +39,17 @@ export default async function DriveConfigDaContaPage({ params }: { params: { id:
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
-      <div className="mb-4">
-        <Link href="/contas" className="text-sm text-slate-500 hover:underline">
-          ← Todas as contas
-        </Link>
-        <h1 className="mt-1 text-2xl font-semibold text-slate-900">{(conta as Account).name}</h1>
-        <p className="text-sm text-slate-500">
-          O robô confere a pasta do dia uma vez por dia (às 11h) e cria o post automaticamente pra essa conta.
-        </p>
-      </div>
-
-      <ContaTabs accountId={params.id} />
+      <ContaTabs accountId={params.id}>
+        <div>
+          <Link href="/contas" className="text-sm text-slate-500 hover:underline">
+            ← Todas as contas
+          </Link>
+          <h1 className="mt-1 text-2xl font-semibold text-slate-900">{(conta as Account).name}</h1>
+          <p className="text-sm text-slate-500">
+            O robô confere a pasta do dia uma vez por dia (às 11h) e cria o post automaticamente pra essa conta.
+          </p>
+        </div>
+      </ContaTabs>
 
       {error && (
         <div className="mb-6 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 ring-1 ring-red-200">

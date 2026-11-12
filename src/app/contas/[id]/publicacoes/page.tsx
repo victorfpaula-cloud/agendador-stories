@@ -46,15 +46,15 @@ export default async function PublicacoesDaContaPage({
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
-      <div className="mb-4">
-        <Link href="/contas" className="text-sm text-slate-500 hover:underline">
-          ← Todas as contas
-        </Link>
-        <h1 className="mt-1 text-2xl font-semibold text-slate-900">{(conta as Account).name}</h1>
-        <p className="text-sm text-slate-500">Feed, Reels e carrossel — agendamento avulso.</p>
-      </div>
-
-      <ContaTabs accountId={(conta as Account).id} />
+      <ContaTabs accountId={(conta as Account).id}>
+        <div>
+          <Link href="/contas" className="text-sm text-slate-500 hover:underline">
+            ← Todas as contas
+          </Link>
+          <h1 className="mt-1 text-2xl font-semibold text-slate-900">{(conta as Account).name}</h1>
+          <p className="text-sm text-slate-500">Feed, Reels e carrossel — agendamento avulso.</p>
+        </div>
+      </ContaTabs>
 
       {error && (
         <div className="mb-6 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 ring-1 ring-red-200">

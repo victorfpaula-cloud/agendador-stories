@@ -5,3 +5,4 @@
 // novo deploy.
 export const AUTOSTORY_ATIVO = process.env.NEXT_PUBLIC_AUTOSTORY_ATIVO === "1";
 export const GERADOR_ATIVO = process.env.NEXT_PUBLIC_GERADOR_ATIVO === "1";
+export const DUPLICAR_ATIVO = process.env.NEXT_PUBLIC_DUPLICAR_ATIVO === "1";

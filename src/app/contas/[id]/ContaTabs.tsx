@@ -15,7 +15,7 @@ import DiasFechados from "./DiasFechados";
 // a URL/rotas internas continuam usando "ciclo" por trás, só o nome
 // visível mudou). Cada botão tem seu próprio ícone só pra reforçar
 // visualmente a diferença.
-export default function ContaTabs({ accountId }: { accountId: string }) {
+export default function ContaTabs({ accountId, children }: { accountId: string; children?: React.ReactNode }) {
   const pathname = usePathname();
   const base = `/contas/${accountId}`;
   const emAutoFeed = pathname?.startsWith(`${base}/publicacoes/drive`);
@@ -41,7 +41,10 @@ export default function ContaTabs({ accountId }: { accountId: string }) {
   // cortar borda.
   return (
     <>
-    <div className="mb-6 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+    {/* Menu superior: cabeçalho da conta + abas num contêiner de cor suave, separado do resto da página. */}
+    <div className="mb-6 rounded-3xl border border-indigo-100 bg-gradient-to-b from-[#f1f3ff] to-[#eaedff] p-4 shadow-sm">
+      {children}
+      <div className={`${children ? "mt-4 " : ""}grid grid-cols-2 gap-2 sm:flex sm:flex-wrap`}>
       {abas.map((aba) => (
         <Link
           key={aba.href}
@@ -49,13 +52,14 @@ export default function ContaTabs({ accountId }: { accountId: string }) {
           className={`${"largo" in aba && aba.largo ? "col-span-2 sm:col-span-1 " : ""}flex items-center justify-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-2 text-sm font-medium transition ${
             aba.ativo
               ? "bg-brand-600 text-white shadow-sm"
-              : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              : "bg-white/75 text-slate-700 hover:bg-white"
           }`}
         >
           <aba.Icone className="h-4 w-4 shrink-0" />
           {aba.label}
         </Link>
       ))}
+      </div>
     </div>
       <DiasFechados accountId={accountId} />
     </>

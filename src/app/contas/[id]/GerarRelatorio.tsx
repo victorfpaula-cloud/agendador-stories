@@ -35,7 +35,7 @@ export default function GerarRelatorio({ accountId }: { accountId: string }) {
       <button
         type="button"
         onClick={() => setAberto(true)}
-        className="whitespace-nowrap rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:border-brand-400 hover:text-brand-600"
+        className="whitespace-nowrap rounded-lg border border-indigo-100 bg-white px-3 py-2 text-sm text-slate-600 hover:border-brand-400 hover:text-brand-600"
       >
         Gerar relatório
       </button>
