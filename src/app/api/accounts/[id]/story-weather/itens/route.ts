@@ -9,7 +9,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const body = await req.json().catch(() => null);
   const tipo = body?.tipo;
   const itens: { url?: string; path?: string; mediaType?: "IMAGE" | "VIDEO"; thumbnailDataUrl?: string | null }[] = Array.isArray(body?.itens) ? body.itens : [];
-  if (tipo !== "chuva" && tipo !== "calor") return NextResponse.json({ erro: "Tipo inválido." }, { status: 400 });
+  if (tipo !== "chuva" && tipo !== "calor" && tipo !== "frio") return NextResponse.json({ erro: "Tipo inválido." }, { status: 400 });
   if (itens.length === 0) return NextResponse.json({ erro: "Nenhum arquivo enviado." }, { status: 400 });
   if (itens.some((i) => !i.url || !i.path || !i.mediaType)) return NextResponse.json({ erro: "Arquivo incompleto — tente de novo." }, { status: 400 });
 

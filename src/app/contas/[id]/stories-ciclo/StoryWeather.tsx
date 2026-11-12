@@ -12,13 +12,15 @@ type Config = {
   chuva_ativa: boolean;
   calor_ativo: boolean;
   calor_graus: number;
+  frio_ativo: boolean;
+  frio_graus: number;
   janela_inicio: string;
   janela_fim: string;
   max_chuva_por_dia: number;
   ultima_checagem: string | null;
   ultima_leitura: { erro?: string } | null;
 };
-type Item = { id: string; tipo: "chuva" | "calor"; media_url: string; media_type: string; thumbnail_data_url: string | null; usado_em: string | null };
+type Item = { id: string; tipo: "chuva" | "calor" | "frio"; media_url: string; media_type: string; thumbnail_data_url: string | null; usado_em: string | null };
 type Post = { id: string; tipo: string; dia: string; status: string; error_message: string | null; created_at: string };
 type Teste = {
   cidade: string;
@@ -26,10 +28,11 @@ type Teste = {
   leitura: { temperatura_agora: number | null; chuva_mm_proxima_hora: number | null; simbolo_proxima_hora: string | null; temperatura_max_hoje: number | null };
   chuva: { indica: boolean; minimo_mm: number };
   calor: { indica: boolean; graus: number };
+  frio: { indica: boolean; graus: number };
 };
 
 const PADRAO: Config = {
-  ativo: false, cidade: null, chuva_ativa: true, calor_ativo: false, calor_graus: 34,
+  ativo: false, cidade: null, chuva_ativa: true, calor_ativo: false, calor_graus: 34, frio_ativo: false, frio_graus: 15,
   janela_inicio: "09:00", janela_fim: "22:00", max_chuva_por_dia: 1, ultima_checagem: null, ultima_leitura: null,
 };
 
@@ -113,7 +116,7 @@ export default function StoryWeather({ accountId }: { accountId: string }) {
     }
   }
 
-  async function enviar(tipo: "chuva" | "calor", files: FileList | null) {
+  async function enviar(tipo: "chuva" | "calor" | "frio", files: FileList | null) {
     if (!files || files.length === 0) return;
     if (!(await confirmarProporcaoStory(Array.from(files)))) return;
     setOcupado(true);
@@ -147,7 +150,7 @@ export default function StoryWeather({ accountId }: { accountId: string }) {
     }
   }
 
-  const galeria = (tipo: "chuva" | "calor", titulo: string) => {
+  const galeria = (tipo: "chuva" | "calor" | "frio", titulo: string) => {
     const lista = itens.filter((i) => i.tipo === tipo);
     return (
       <div className="mt-3">
@@ -173,7 +176,7 @@ export default function StoryWeather({ accountId }: { accountId: string }) {
     );
   };
 
-  const podeLigar = !!config.cidade && (config.chuva_ativa || config.calor_ativo);
+  const podeLigar = !!config.cidade && (config.chuva_ativa || config.calor_ativo || config.frio_ativo);
 
   return (
     <section className="mb-6 rounded-xl2 bg-sky-50 p-4 ring-1 ring-sky-200">
@@ -247,6 +250,19 @@ export default function StoryWeather({ accountId }: { accountId: string }) {
               </div>
             </div>
             {galeria("calor", "Artes de calor")}
+
+            <div className="flex items-start gap-3 border-t border-slate-100 pt-3">
+              <Chave ligado={config.frio_ativo} onClick={() => salvar({ frio_ativo: !config.frio_ativo })} desabilitado={ocupado} />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-slate-900">🥶 Frio</p>
+                <p className="text-xs text-slate-500">Posta uma vez no dia (só se a conta já tiver publicado algo), confirmado em duas leituras seguidas, quando a temperatura de agora estiver em:</p>
+                <label className="mt-1 flex items-center gap-2 text-xs text-slate-600">
+                  <input type="number" min={0} max={25} defaultValue={config.frio_graus} key={`fr${config.frio_graus}`} onBlur={(e) => Number(e.target.value) !== config.frio_graus && salvar({ frio_graus: Number(e.target.value) })} className="w-16 rounded border border-slate-300 px-1 py-0.5" />
+                  °C ou menos
+                </label>
+              </div>
+            </div>
+            {galeria("frio", "Artes de frio")}
           </div>
 
           <div>
@@ -270,6 +286,7 @@ export default function StoryWeather({ accountId }: { accountId: string }) {
                 <li>🌧️ Chuva prevista na próxima hora: {teste.leitura.chuva_mm_proxima_hora ?? "—"} mm ({teste.leitura.simbolo_proxima_hora ?? "sem dado"})</li>
                 <li className="font-medium">{teste.chuva.indica ? "➡️ Indica CHUVA (ainda precisa confirmar na próxima leitura)" : `➡️ Não indica chuva (mínimo ${teste.chuva.minimo_mm} mm + classificação de chuva)`}</li>
                 <li className={teste.ja_publicou_hoje ? "" : "font-medium text-amber-700"}>{teste.ja_publicou_hoje ? "✅ A conta já publicou algo hoje — o Story Weather pode sair." : "⛔ A conta ainda não publicou nada hoje — o Story Weather NÃO sai (pode estar fechado)."}</li>
+                <li className="font-medium">{teste.frio.indica ? `➡️ Indica FRIO (≤ ${teste.frio.graus} °C agora; ainda precisa confirmar na próxima leitura)` : `➡️ Não indica frio (limite ${teste.frio.graus} °C)`}</li>
                 <li className="font-medium">{teste.calor.indica ? `➡️ Indica CALOR (≥ ${teste.calor.graus} °C)` : `➡️ Não indica calor (limite ${teste.calor.graus} °C)`}</li>
               </ul>
             )}

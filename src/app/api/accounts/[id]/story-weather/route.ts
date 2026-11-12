@@ -33,6 +33,12 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   const campos: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (typeof body.chuva_ativa === "boolean") campos.chuva_ativa = body.chuva_ativa;
   if (typeof body.calor_ativo === "boolean") campos.calor_ativo = body.calor_ativo;
+  if (typeof body.frio_ativo === "boolean") campos.frio_ativo = body.frio_ativo;
+  if (body.frio_graus !== undefined) {
+    const g = Number(body.frio_graus);
+    if (!Number.isInteger(g) || g < 0 || g > 25) return NextResponse.json({ erro: "A temperatura do frio deve ser entre 0 e 25 °C." }, { status: 400 });
+    campos.frio_graus = g;
+  }
   if (body.calor_graus !== undefined) {
     const g = Number(body.calor_graus);
     if (!Number.isInteger(g) || g < 25 || g > 45) return NextResponse.json({ erro: "A temperatura deve ser entre 25 e 45 °C." }, { status: 400 });
@@ -59,6 +65,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     campos.latitude = Number(lat.toFixed(4));
     campos.longitude = Number(lon.toFixed(4));
     campos.chuva_confirmacoes = 0;
+    campos.frio_confirmacoes = 0;
     campos.ultima_checagem = null;
     campos.ultima_leitura = null;
   }
@@ -66,7 +73,10 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     const temCidade = (campos.cidade ?? atual?.cidade) && (campos.latitude ?? atual?.latitude) != null;
     if (body.ativo && !temCidade) return NextResponse.json({ erro: "Escolha a cidade antes de ligar." }, { status: 400 });
     campos.ativo = body.ativo;
-    if (!body.ativo) campos.chuva_confirmacoes = 0;
+    if (!body.ativo) {
+      campos.chuva_confirmacoes = 0;
+      campos.frio_confirmacoes = 0;
+    }
   }
   const inicio = String(campos.janela_inicio ?? atual?.janela_inicio ?? "09:00").slice(0, 5);
   const fim = String(campos.janela_fim ?? atual?.janela_fim ?? "22:00").slice(0, 5);

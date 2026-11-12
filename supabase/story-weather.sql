@@ -15,6 +15,9 @@ create table public.story_weather_config (
   janela_inicio time not null default '09:00',
   janela_fim time not null default '22:00',
   max_chuva_por_dia int not null default 1,
+  frio_ativo boolean not null default false,
+  frio_graus int not null default 15,
+  frio_confirmacoes int not null default 0,
   -- estado do motor: leituras seguidas com chuva (precisa de 2) e a última leitura
   chuva_confirmacoes int not null default 0,
   ultima_checagem timestamptz,
@@ -25,7 +28,7 @@ create table public.story_weather_config (
 create table public.story_weather_itens (
   id uuid primary key default gen_random_uuid(),
   account_id uuid not null references public.accounts(id) on delete cascade,
-  tipo text not null check (tipo in ('chuva','calor')),
+  tipo text not null check (tipo in ('chuva','calor','frio')),
   media_url text not null,
   media_path text not null,
   media_type text not null check (media_type in ('IMAGE','VIDEO')),
@@ -40,7 +43,7 @@ create index story_weather_itens_conta_tipo_idx on public.story_weather_itens (a
 create table public.story_weather_posts (
   id uuid primary key default gen_random_uuid(),
   account_id uuid not null references public.accounts(id) on delete cascade,
-  tipo text not null check (tipo in ('chuva','calor')),
+  tipo text not null check (tipo in ('chuva','calor','frio')),
   dia date not null,
   seq int not null,
   status text not null default 'publishing' check (status in ('publishing','success','error')),

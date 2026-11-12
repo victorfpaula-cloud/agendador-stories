@@ -4,7 +4,7 @@ import { publicarStory, MetaApiError } from "@/lib/meta";
 import { crossPostStoryFacebook } from "@/lib/crossPostStoryFacebook";
 import { enviarEmail } from "@/lib/email";
 import { carregarDiasFechados, chaveDiaFechado } from "@/lib/diasFechados";
-import { indicaCalor, indicaChuva, lerPrevisao, type Leitura } from "@/lib/weather";
+import { indicaCalor, indicaChuva, indicaFrio, lerPrevisao, type Leitura } from "@/lib/weather";
 import type { Account } from "@/types/database";
 
 // Story Weather: publica um Story pronto quando o tempo combina.
@@ -12,6 +12,8 @@ import type { Account } from "@/types/database";
 //    chuva; no máximo N por dia e com ≥3h entre um e outro.
 //  - Calor: uma vez por dia, quando a máxima prevista pra hoje bate o valor
 //    configurado.
+//  - Frio: uma vez por dia, quando a temperatura de agora está no valor
+//    configurado ou abaixo, confirmada em duas leituras seguidas.
 // Só age dentro da janela de horário da conta, respeita conta pausada e dia
 // fechado, e nunca apaga arquivo nenhum. Falha de previsão = não publica.
 type Admin = ReturnType<typeof createAdminClient>;
@@ -28,6 +30,9 @@ type Config = {
   janela_inicio: string;
   janela_fim: string;
   max_chuva_por_dia: number;
+  frio_ativo: boolean;
+  frio_graus: number;
+  frio_confirmacoes: number;
   chuva_confirmacoes: number;
   ultima_checagem: string | null;
   accounts: Account;
@@ -54,7 +59,7 @@ async function arquivoExiste(url: string): Promise<boolean> {
 }
 
 // Arte que está há mais tempo sem uso (com arquivo existente).
-async function escolherItem(admin: Admin, accountId: string, tipo: "chuva" | "calor"): Promise<Item | null> {
+async function escolherItem(admin: Admin, accountId: string, tipo: "chuva" | "calor" | "frio"): Promise<Item | null> {
   const { data } = await admin
     .from("story_weather_itens")
     .select("id, media_url, media_type")
@@ -114,7 +119,7 @@ export async function executarStoryWeather(admin: Admin) {
     try {
       if (agoraMin < minutos(cfg.janela_inicio) || agoraMin > minutos(cfg.janela_fim)) {
         resultados[chave] = "fora_da_janela";
-        if (cfg.chuva_confirmacoes !== 0) await admin.from("story_weather_config").update({ chuva_confirmacoes: 0 }).eq("account_id", cfg.account_id);
+        if (cfg.chuva_confirmacoes !== 0 || cfg.frio_confirmacoes !== 0) await admin.from("story_weather_config").update({ chuva_confirmacoes: 0, frio_confirmacoes: 0 }).eq("account_id", cfg.account_id);
         continue;
       }
       if (fechados.has(chaveDiaFechado(conta.id, dataISO))) {
@@ -134,7 +139,7 @@ export async function executarStoryWeather(admin: Admin) {
         const msg = err instanceof Error ? err.message : "Erro ao ler a previsão.";
         await admin
           .from("story_weather_config")
-          .update({ chuva_confirmacoes: 0, ultima_checagem: new Date().toISOString(), ultima_leitura: { erro: msg } })
+          .update({ chuva_confirmacoes: 0, frio_confirmacoes: 0, ultima_checagem: new Date().toISOString(), ultima_leitura: { erro: msg } })
           .eq("account_id", cfg.account_id);
         resultados[chave] = "sem_previsao";
         continue;
@@ -142,17 +147,21 @@ export async function executarStoryWeather(admin: Admin) {
 
       const chovendo = cfg.chuva_ativa && indicaChuva(leitura);
       const confirmacoes = chovendo ? cfg.chuva_confirmacoes + 1 : 0;
+      const fazFrio = cfg.frio_ativo && indicaFrio(leitura, cfg.frio_graus);
+      const confirmacoesFrio = fazFrio ? cfg.frio_confirmacoes + 1 : 0;
       await admin
         .from("story_weather_config")
-        .update({ chuva_confirmacoes: confirmacoes, ultima_checagem: new Date().toISOString(), ultima_leitura: leitura })
+        .update({ chuva_confirmacoes: confirmacoes, frio_confirmacoes: confirmacoesFrio, ultima_checagem: new Date().toISOString(), ultima_leitura: leitura })
         .eq("account_id", cfg.account_id);
 
       if (cfg.chuva_ativa && confirmacoes >= 2) {
         resultados[chave] = `chuva:${await tentarPublicar(admin, conta, cfg, "chuva", dataISO, leitura)}`;
       } else if (cfg.calor_ativo && indicaCalor(leitura, cfg.calor_graus)) {
         resultados[chave] = `calor:${await tentarPublicar(admin, conta, cfg, "calor", dataISO, leitura)}`;
+      } else if (cfg.frio_ativo && confirmacoesFrio >= 2) {
+        resultados[chave] = `frio:${await tentarPublicar(admin, conta, cfg, "frio", dataISO, leitura)}`;
       } else {
-        resultados[chave] = chovendo ? "aguardando_confirmacao" : "sem_gatilho";
+        resultados[chave] = chovendo || fazFrio ? "aguardando_confirmacao" : "sem_gatilho";
       }
     } catch (err) {
       resultados[chave] = `erro:${err instanceof Error ? err.message : "desconhecido"}`;
@@ -166,7 +175,7 @@ async function tentarPublicar(
   admin: Admin,
   conta: Account,
   cfg: Config,
-  tipo: "chuva" | "calor",
+  tipo: "chuva" | "calor" | "frio",
   dia: string,
   leitura: Leitura
 ): Promise<string> {
@@ -182,7 +191,7 @@ async function tentarPublicar(
 
   const ocupados = registros.filter((r) => r.status !== "error");
   const erros = registros.filter((r) => r.status === "error").length;
-  const limite = tipo === "calor" ? 1 : cfg.max_chuva_por_dia;
+  const limite = tipo === "chuva" ? cfg.max_chuva_por_dia : 1;
   if (ocupados.length >= limite) return "limite_do_dia";
   if (erros >= MAX_ERROS_POR_DIA) return "muitos_erros";
   if (tipo === "chuva" && ocupados.some((r) => Date.now() - new Date(r.created_at).getTime() < INTERVALO_ENTRE_CHUVAS_MS)) {

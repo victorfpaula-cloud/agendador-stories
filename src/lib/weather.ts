@@ -64,6 +64,11 @@ export function indicaChuva(l: Leitura): boolean {
   return (l.chuva_mm_proxima_hora ?? 0) >= CHUVA_MIN_MM && /(rain|thunder|sleet|shower)/.test(simbolo);
 }
 
+// Frio: a temperatura de AGORA está no limite configurado ou abaixo.
+export function indicaFrio(l: Leitura, graus: number): boolean {
+  return l.temperatura_agora !== null && l.temperatura_agora <= graus;
+}
+
 export function indicaCalor(l: Leitura, graus: number): boolean {
   return l.temperatura_max_hoje !== null && l.temperatura_max_hoje >= graus;
 }
