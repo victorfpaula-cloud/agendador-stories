@@ -14,7 +14,7 @@ export type ResumoDoDia = { total: number; postados: number; erros: number };
 // atualizados. É pouquíssimo processamento (uma consulta leve) e cobre bem
 // o caso de uso: deixar a tela de contas aberta e ver os números subindo
 // sozinhos ao longo do dia, sem precisar dar refresh manual.
-const INTERVALO_RESUMO_MS = 45_000;
+const INTERVALO_RESUMO_MS = 90_000;
 
 // Mesmo padrão de tratamento de erro usado no editor de horários: evita
 // travar silenciosamente se a sessão expirou ou o servidor respondeu
@@ -66,7 +66,10 @@ export default function ListaContas({
   const [resumoAtual, setResumoAtual] = useState<Record<string, ResumoDoDia>>(resumoHoje);
   const [storiesDriveAtual, setStoriesDriveAtual] = useState<Record<string, ResumoAutoStory>>(storiesAutomaticosHoje);
   const [storyEngineAtual, setStoryEngineAtual] = useState<Record<string, ResumoStoryEngine>>(storyEngineHoje);
-  const [avatares, setAvatares] = useState<Record<string, string | null>>({});
+  // Começa com as fotos que o servidor já mandou (guardadas no nosso Storage).
+  const [avatares, setAvatares] = useState<Record<string, string | null>>(() =>
+    Object.fromEntries(initialContas.map((c) => [c.id, c.avatar_url ?? null]))
+  );
 
   function aoAtualizar(conta: Account) {
     setContas((atual) => atual.map((c) => (c.id === conta.id ? conta : c)));
@@ -115,6 +118,18 @@ export default function ListaContas({
   // resposta, cada card mostra o círculo com a inicial do nome.
   useEffect(() => {
     let cancelado = false;
+
+    // Só consulta se alguma conta ainda não tem a foto guardada, ou a cópia
+    // tem mais de 30 dias. Com todas em dia, abrir a tela não faz nenhuma
+    // chamada extra.
+    const TRINTA_DIAS = 30 * 24 * 60 * 60 * 1000;
+    const precisaAtualizar = initialContas.some(
+      (c) =>
+        !c.avatar_atualizado_em ||
+        Date.now() - new Date(c.avatar_atualizado_em).getTime() > TRINTA_DIAS ||
+        (!!c.avatar_url && !c.avatar_url.includes("/storage/v1/object/public/"))
+    );
+    if (!precisaAtualizar) return;
 
     chamarApi("/api/contas/avatares")
       .then((json) => {
@@ -251,6 +266,8 @@ function ContaCard({
               alt={conta.name}
               className="h-11 w-11 shrink-0 rounded-full object-cover ring-1 ring-slate-200"
               referrerPolicy="no-referrer"
+              loading="lazy"
+              decoding="async"
               onError={() => setFotoFalhou(true)}
             />
           ) : (

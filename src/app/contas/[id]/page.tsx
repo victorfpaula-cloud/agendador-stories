@@ -14,33 +14,44 @@ export const dynamic = "force-dynamic";
 export default async function ContaPage({ params }: { params: { id: string } }) {
   const admin = createAdminClient();
 
-  const { data: conta } = await admin.from("accounts").select("*").eq("id", params.id).maybeSingle();
+  const { diaSemanaIso, dataISO } = agoraEmSaoPaulo();
+
+  // Todas as consultas independentes saem ao mesmo tempo (antes eram oito,
+  // uma depois da outra). Duas consultas simples em vez de um join embutido
+  // pro Story Engine de propósito: sem tipos gerados do banco, o supabase-js
+  // infere embed como array mesmo sendo N:1 (já deu erro de build antes).
+  const [
+    { data: conta },
+    { data: outrasContas }, // pro seletor de "Duplicar rotina de…"
+    { data: slots },
+    { data: logs },
+    { data: storyEngineHorarios },
+    { data: storyEngineCategorias },
+    { data: storyEnginePostsHoje },
+    { data: unicos },
+  ] = await Promise.all([
+    admin.from("accounts").select("*").eq("id", params.id).maybeSingle(),
+    admin.from("accounts").select("id, name").neq("id", params.id).order("name", { ascending: true }),
+    admin.from("schedule_slots").select("*").eq("account_id", params.id).order("time_of_day", { ascending: true }),
+    // Só os logs de hoje: é o único dia em que "aguardando/publicado/erro" faz sentido.
+    admin.from("publish_log").select("*").eq("account_id", params.id).eq("scheduled_for", dataISO).order("created_at", { ascending: true }),
+    admin.from("story_ciclo_horario").select("id, horario, category_id").eq("is_active", true),
+    admin.from("story_ciclo_categoria").select("id, nome, dias_semana").eq("account_id", params.id).eq("ativa", true),
+    admin.from("story_ciclo_posts").select("horario_id, status").eq("account_id", params.id).eq("dia", dataISO),
+    // Agendamento Único: dias ainda por sair (ou com erro) de cada agendamento.
+    admin
+      .from("story_unico_posts")
+      .select("id, grupo_id, dia, scheduled_at, status, error_message, thumbnail_data_url")
+      .eq("account_id", params.id)
+      .in("status", ["pending", "publishing", "error", "success"])
+      .gte("scheduled_at", new Date(Date.now() - 3 * 86_400_000).toISOString())
+      .order("scheduled_at", { ascending: true }),
+  ]);
   if (!conta) notFound();
-
-  // Lista das outras contas, pra alimentar o seletor de "Duplicar rotina de…".
-  const { data: outrasContas } = await admin
-    .from("accounts")
-    .select("id, name")
-    .neq("id", params.id)
-    .order("name", { ascending: true });
-
-  const { data: slots } = await admin
-    .from("schedule_slots")
-    .select("*")
-    .eq("account_id", params.id)
-    .order("time_of_day", { ascending: true });
 
   // Status de publicação de hoje (pra bolinha colorida): só busca os logs do dia
   // atual, já que é o único dia em que "aguardando/publicado/erro" faz sentido —
   // dias futuros ainda não tiveram nenhuma tentativa.
-  const { diaSemanaIso, dataISO } = agoraEmSaoPaulo();
-  const { data: logs } = await admin
-    .from("publish_log")
-    .select("*")
-    .eq("account_id", params.id)
-    .eq("scheduled_for", dataISO)
-    .order("created_at", { ascending: true });
-
   // Ordenado do mais antigo pro mais novo, então se um horário teve mais de
   // uma tentativa hoje (ex: erro às 10:05 e sucesso de novo às 11:30 depois
   // de mudar o horário), a última tentativa é a que "vence" e aparece na bolinha.
@@ -63,17 +74,6 @@ export default async function ContaPage({ params }: { params: { id: string } }) 
   // sem tipos gerados do banco, o supabase-js infere embed como array
   // mesmo sendo N:1, o que já deu erro de build antes (ver
   // /api/cron/gerar-stories-ciclo).
-  const { data: storyEngineHorarios } = await admin
-    .from("story_ciclo_horario")
-    .select("id, horario, category_id")
-    .eq("is_active", true);
-
-  const { data: storyEngineCategorias } = await admin
-    .from("story_ciclo_categoria")
-    .select("id, nome, dias_semana")
-    .eq("account_id", params.id)
-    .eq("ativa", true);
-
   const categoriasPorId = new Map<string, { nome: string; dias_semana: number[] }>(
     ((storyEngineCategorias ?? []) as { id: string; nome: string; dias_semana: number[] }[]).map((c) => [
       c.id,
@@ -89,27 +89,12 @@ export default async function ContaPage({ params }: { params: { id: string } }) 
     })
     .filter((s): s is { id: string; horario: string; categoriaNome: string; diasSemana: number[] } => s !== null);
 
-  const { data: storyEnginePostsHoje } = await admin
-    .from("story_ciclo_posts")
-    .select("horario_id, status")
-    .eq("account_id", params.id)
-    .eq("dia", dataISO);
-
   const storyEngineStatusHoje: Record<string, "success" | "error"> = {};
   for (const post of (storyEnginePostsHoje ?? []) as { horario_id: string | null; status: string }[]) {
     if (post.horario_id && (post.status === "success" || post.status === "error")) {
       storyEngineStatusHoje[post.horario_id] = post.status;
     }
   }
-
-  // Agendamento Único: dias ainda por sair (ou com erro) de cada agendamento.
-  const { data: unicos } = await admin
-    .from("story_unico_posts")
-    .select("id, grupo_id, dia, scheduled_at, status, error_message, thumbnail_data_url")
-    .eq("account_id", params.id)
-    .in("status", ["pending", "publishing", "error", "success"])
-    .gte("scheduled_at", new Date(Date.now() - 3 * 86_400_000).toISOString())
-    .order("scheduled_at", { ascending: true });
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-10">

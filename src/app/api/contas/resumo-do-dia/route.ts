@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { agoraEmSaoPaulo } from "@/lib/days";
+import { AUTOSTORY_ATIVO } from "@/lib/funcoesEmStandby";
 import { buscarStoryEngineHoje } from "@/lib/storyCicloResumo";
 
 export const dynamic = "force-dynamic";
@@ -15,18 +16,17 @@ export async function GET() {
   const admin = createAdminClient();
   const { diaSemanaIso, dataISO } = agoraEmSaoPaulo();
 
-  const { data: contas } = await admin.from("accounts").select("id");
-
-  const { data: slotsHojeData } = await admin
-    .from("schedule_slots")
-    .select("account_id")
-    .eq("day_of_week", diaSemanaIso)
-    .eq("is_active", true);
-
-  const { data: logsHojeData } = await admin
-    .from("publish_log")
-    .select("account_id, status")
-    .eq("scheduled_for", dataISO);
+  // Consultas em paralelo (antes uma depois da outra). AutoStory em stand-by
+  // não consulta nada.
+  const [{ data: contas }, { data: slotsHojeData }, { data: logsHojeData }, storyDriveConfigs, storiesHojeData, storyEngineHoje] =
+    await Promise.all([
+      admin.from("accounts").select("id"),
+      admin.from("schedule_slots").select("account_id").eq("day_of_week", diaSemanaIso).eq("is_active", true),
+      admin.from("publish_log").select("account_id, status").eq("scheduled_for", dataISO),
+      AUTOSTORY_ATIVO ? admin.from("story_drive_config").select("account_id").then((r) => r.data) : Promise.resolve([]),
+      AUTOSTORY_ATIVO ? admin.from("story_posts").select("account_id, status").eq("dia", dataISO).then((r) => r.data) : Promise.resolve([]),
+      buscarStoryEngineHoje(admin, diaSemanaIso, dataISO),
+    ]);
 
   const resumo: Record<string, { total: number; postados: number; erros: number }> = {};
   for (const conta of (contas ?? []) as { id: string }[]) {
@@ -43,10 +43,8 @@ export async function GET() {
 
   // Mesma ideia do resumo acima, mas pro card do robô do Story Automático
   // Drive (só aparece pras contas que têm essa automação configurada).
-  const { data: storyDriveConfigs } = await admin.from("story_drive_config").select("account_id");
   // Por `dia` (não por scheduled_at) — um Story sem horário reconhecido
   // ainda conta como "agendado hoje" mesmo com scheduled_at nulo.
-  const { data: storiesHojeData } = await admin.from("story_posts").select("account_id, status").eq("dia", dataISO);
 
   const storiesAutomaticosHoje: Record<string, { agendados: number; postados: number }> = {};
   for (const { account_id } of (storyDriveConfigs ?? []) as { account_id: string }[]) {
@@ -57,8 +55,6 @@ export async function GET() {
     storiesAutomaticosHoje[s.account_id].agendados += 1;
     if (s.status === "success") storiesAutomaticosHoje[s.account_id].postados += 1;
   }
-
-  const storyEngineHoje = await buscarStoryEngineHoje(admin, diaSemanaIso, dataISO);
 
   return NextResponse.json({ diaHoje: diaSemanaIso, resumo, storiesAutomaticosHoje, storyEngineHoje });
 }

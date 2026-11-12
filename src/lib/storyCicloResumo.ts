@@ -15,20 +15,11 @@ export async function buscarStoryEngineHoje(
   diaSemanaIso: number,
   dataISO: string
 ): Promise<Record<string, { agendados: number; postados: number }>> {
-  const { data: horarios } = await admin
-    .from("story_ciclo_horario")
-    .select("id, category_id")
-    .eq("is_active", true);
-
-  const { data: categorias } = await admin
-    .from("story_ciclo_categoria")
-    .select("id, account_id, dias_semana")
-    .eq("ativa", true);
-
-  const { data: postsHoje } = await admin
-    .from("story_ciclo_posts")
-    .select("account_id, status")
-    .eq("dia", dataISO);
+  const [{ data: horarios }, { data: categorias }, { data: postsHoje }] = await Promise.all([
+    admin.from("story_ciclo_horario").select("id, category_id").eq("is_active", true),
+    admin.from("story_ciclo_categoria").select("id, account_id, dias_semana").eq("ativa", true),
+    admin.from("story_ciclo_posts").select("account_id, status").eq("dia", dataISO),
+  ]);
 
   const categoriasPorId = new Map<string, { account_id: string; dias_semana: number[] }>();
   for (const c of (categorias ?? []) as { id: string; account_id: string; dias_semana: number[] }[]) {

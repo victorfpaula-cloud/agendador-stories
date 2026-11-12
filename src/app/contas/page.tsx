@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { agoraEmSaoPaulo } from "@/lib/days";
+import { AUTOSTORY_ATIVO } from "@/lib/funcoesEmStandby";
 import { buscarStoryEngineHoje } from "@/lib/storyCicloResumo";
 import type { ContaPublica } from "@/types/database";
 import LogoutButton from "./LogoutButton";
@@ -13,30 +14,33 @@ export default async function ContasPage({
   searchParams: { erro?: string };
 }) {
   const admin = createAdminClient();
-  // Sem page_access_token de propósito: essa lista vai inteira pro navegador
-  // (ListaContas é componente de cliente) e o token das Páginas nunca deve
-  // sair do servidor.
-  const { data: contas } = await admin
-    .from("accounts")
-    .select("id, name, page_id, ig_user_id, ig_username, is_active, token_obtained_at, avatar_url, avatar_atualizado_em, created_at, cross_post_facebook, cross_post_facebook_stories")
-    .order("name", { ascending: true });
-
-  const lista = (contas ?? []) as unknown as ContaPublica[];
-
-  // Resumo do dia por conta (pra mostrar "3 de 10 postados" nos cards).
-  // Só duas consultas no total, independente de quantas contas existirem.
   const { diaSemanaIso, dataISO } = agoraEmSaoPaulo();
 
-  const { data: slotsHojeData } = await admin
-    .from("schedule_slots")
-    .select("account_id")
-    .eq("day_of_week", diaSemanaIso)
-    .eq("is_active", true);
+  // Todas as consultas ao banco saem ao mesmo tempo (antes eram uma depois da
+  // outra, somando a espera de cada uma). Sem page_access_token de propósito:
+  // essa lista vai inteira pro navegador (ListaContas é componente de
+  // cliente) e o token das Páginas nunca deve sair do servidor.
+  const [
+    { data: contas },
+    { data: slotsHojeData },
+    { data: logsHojeData },
+    storyDriveConfigs,
+    storiesHojeData,
+    storyEngineHoje,
+  ] = await Promise.all([
+    admin
+      .from("accounts")
+      .select("id, name, page_id, ig_user_id, ig_username, is_active, token_obtained_at, avatar_url, avatar_atualizado_em, created_at, cross_post_facebook, cross_post_facebook_stories")
+      .order("name", { ascending: true }),
+    admin.from("schedule_slots").select("account_id").eq("day_of_week", diaSemanaIso).eq("is_active", true),
+    admin.from("publish_log").select("account_id, status").eq("scheduled_for", dataISO),
+    // AutoStory está em stand-by: sem consulta nenhuma enquanto estiver.
+    AUTOSTORY_ATIVO ? admin.from("story_drive_config").select("account_id").then((r) => r.data) : Promise.resolve([]),
+    AUTOSTORY_ATIVO ? admin.from("story_posts").select("account_id, status").eq("dia", dataISO).then((r) => r.data) : Promise.resolve([]),
+    buscarStoryEngineHoje(admin, diaSemanaIso, dataISO),
+  ]);
 
-  const { data: logsHojeData } = await admin
-    .from("publish_log")
-    .select("account_id, status")
-    .eq("scheduled_for", dataISO);
+  const lista = (contas ?? []) as unknown as ContaPublica[];
 
   const resumoHoje: Record<string, ResumoDoDia> = {};
   for (const conta of lista) {
@@ -51,14 +55,8 @@ export default async function ContasPage({
     if (log.status === "error") resumoHoje[log.account_id].erros += 1;
   }
 
-  // Quantos Stories automáticos do Drive já saíram hoje, por conta — só
-  // aparece o card pras contas que têm essa automação configurada (evita
-  // mostrar "0" pra quem nem usa esse recurso).
-  const { data: storyDriveConfigs } = await admin.from("story_drive_config").select("account_id");
-  // Por `dia` (não por scheduled_at) — um Story sem horário reconhecido
-  // ainda conta como "agendado hoje" mesmo com scheduled_at nulo.
-  const { data: storiesHojeData } = await admin.from("story_posts").select("account_id, status").eq("dia", dataISO);
-
+  // Quantos Stories automáticos do Drive já saíram hoje, por conta (só pras
+  // contas com essa automação configurada).
   const storiesAutomaticosHoje: Record<string, { agendados: number; postados: number }> = {};
   for (const { account_id } of (storyDriveConfigs ?? []) as { account_id: string }[]) {
     storiesAutomaticosHoje[account_id] = { agendados: 0, postados: 0 };
@@ -68,8 +66,6 @@ export default async function ContasPage({
     storiesAutomaticosHoje[s.account_id].agendados += 1;
     if (s.status === "success") storiesAutomaticosHoje[s.account_id].postados += 1;
   }
-
-  const storyEngineHoje = await buscarStoryEngineHoje(admin, diaSemanaIso, dataISO);
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
