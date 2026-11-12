@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { nomeDia } from "@/lib/days";
 import type { ContaPublica as Account } from "@/types/database";
-import { IconeStoryEngine } from "./[id]/ContaTabs";
 
 export type ResumoDoDia = { total: number; postados: number; erros: number };
 
@@ -296,7 +295,7 @@ function ContaCard({
         </p>
       </Link>
 
-      {(storiesAutomaticosHoje !== undefined || storyEngineHoje !== undefined) && (
+      {storiesAutomaticosHoje !== undefined && (
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
           {storiesAutomaticosHoje !== undefined && (
             <div
@@ -307,18 +306,6 @@ function ContaCard({
               <span>AutoStory</span>
               <span className="rounded-full bg-indigo-600 px-1.5 py-0.5 text-[10px] leading-none text-white">
                 {storiesAutomaticosHoje.postados}/{storiesAutomaticosHoje.agendados}
-              </span>
-            </div>
-          )}
-          {storyEngineHoje !== undefined && (
-            <div
-              className="flex w-fit items-center gap-1.5 rounded-full bg-violet-50 px-2 py-1 text-[11px] font-medium text-violet-700"
-              title="Story Engine publicados hoje / agendados pra hoje"
-            >
-              <IconeStoryEngine className="h-3 w-3 shrink-0" />
-              <span>Story Engine</span>
-              <span className="rounded-full bg-violet-600 px-1.5 py-0.5 text-[10px] leading-none text-white">
-                {storyEngineHoje.postados}/{storyEngineHoje.agendados}
               </span>
             </div>
           )}
