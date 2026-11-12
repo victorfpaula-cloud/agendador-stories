@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { executarLeituraStoryDrive } from "@/lib/storyDriveIngestao";
+import { AUTOSTORY_ATIVO } from "@/lib/funcoesEmStandby";
 import { executarGeracaoStoriesCiclo } from "@/lib/storyCicloGeracao";
 
 // Chamada única que roda os 2 motores de "gerar conteúdo novo" (AutoStory
@@ -42,6 +43,7 @@ async function executar(req: NextRequest) {
 
   const [storiesDrive, storiesCiclo] = await Promise.all([
     comSeguranca("AutoStory", async () => {
+      if (!AUTOSTORY_ATIVO) return { standby: true, resultados: {} };
       const { data: configs } = await admin.from("story_drive_config").select("account_id");
       const resultados: Record<string, Awaited<ReturnType<typeof executarLeituraStoryDrive>>> = {};
       for (const { account_id } of configs ?? []) {

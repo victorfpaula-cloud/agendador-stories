@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { AUTOSTORY_ATIVO } from "@/lib/funcoesEmStandby";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { executarPublicarStoriesDrive } from "@/lib/engines/publicarStoriesDrive";
 
@@ -26,6 +27,7 @@ async function executar(req: NextRequest) {
     return NextResponse.json({ erro: "Não autorizado." }, { status: 401 });
   }
 
+  if (!AUTOSTORY_ATIVO) return NextResponse.json({ standby: true });
   const admin = createAdminClient();
   const resultado = await executarPublicarStoriesDrive(admin);
   return NextResponse.json(resultado);

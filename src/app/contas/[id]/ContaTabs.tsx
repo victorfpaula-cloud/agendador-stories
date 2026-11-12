@@ -1,5 +1,6 @@
 "use client";
 
+import { AUTOSTORY_ATIVO, GERADOR_ATIVO } from "@/lib/funcoesEmStandby";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import DiasFechados from "./DiasFechados";
@@ -28,9 +29,9 @@ export default function ContaTabs({ accountId }: { accountId: string }) {
     { href: base, label: "Stories", ativo: emStories, Icone: IconeStories },
     { href: `${base}/publicacoes`, label: "Publicações", ativo: !!emPublicacoes, Icone: IconePublicacoes },
     { href: `${base}/publicacoes/drive`, label: "AutoFeed", ativo: !!emAutoFeed, Icone: IconeAutoFeed },
-    { href: `${base}/stories-drive`, label: "AutoStory", ativo: !!emAutoStory, Icone: IconeAutoStory },
+    ...(AUTOSTORY_ATIVO ? [{ href: `${base}/stories-drive`, label: "AutoStory", ativo: !!emAutoStory, Icone: IconeAutoStory }] : []),
     { href: `${base}/stories-ciclo`, label: "Story Engine", ativo: !!emStoryEngine, Icone: IconeStoryEngine },
-    { href: `${base}/gerador-imagens`, label: "Gerador de imagens", ativo: !!emGerador, Icone: IconeGerador, largo: true },
+    ...(GERADOR_ATIVO ? [{ href: `${base}/gerador-imagens`, label: "Gerador de imagens", ativo: !!emGerador, Icone: IconeGerador, largo: true }] : []),
   ];
 
   // Grade 2x2 no celular (4 botões nunca cabiam numa linha só sem cortar

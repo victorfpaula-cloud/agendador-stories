@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { AUTOSTORY_ATIVO, GERADOR_ATIVO } from "@/lib/funcoesEmStandby";
 
 // Achado em 30/09/2026: antes, a lista abaixo era conferida com startsWith, e
 // como toda rota começa com "/", o app inteiro ficava público (inclusive
@@ -24,6 +25,14 @@ export async function middleware(req: NextRequest) {
 
   if (PAGINAS_PUBLICAS.has(pathname) || PREFIXOS_PUBLICOS.some((prefixo) => pathname.startsWith(prefixo))) {
     return NextResponse.next();
+  }
+
+  // Funções em stand-by: as rotas delas respondem "desativado" e nada roda.
+  const emStandby =
+    (!GERADOR_ATIVO && /^\/api\/accounts\/[^/]+\/gerador(\/|$)/.test(pathname)) ||
+    (!AUTOSTORY_ATIVO && /^\/api\/accounts\/[^/]+\/story-drive-config(\/|$)/.test(pathname));
+  if (emStandby) {
+    return NextResponse.json({ erro: "Essa função está desativada (em stand-by)." }, { status: 410 });
   }
 
   const res = NextResponse.next();

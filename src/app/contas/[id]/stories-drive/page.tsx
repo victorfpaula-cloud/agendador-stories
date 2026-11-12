@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { AUTOSTORY_ATIVO } from "@/lib/funcoesEmStandby";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { agoraEmSaoPaulo } from "@/lib/days";
 import type { Account, StoryDriveConfig, StoryDriveExecucao, StoryPost } from "@/types/database";
@@ -14,6 +15,7 @@ import StoryDriveConfigClient from "./StoryDriveConfigClient";
 export const dynamic = "force-dynamic";
 
 export default async function StoryDriveConfigPage({ params }: { params: { id: string } }) {
+  if (!AUTOSTORY_ATIVO) redirect(`/contas/${params.id}`);
   const admin = createAdminClient();
 
   const { data: conta } = await admin.from("accounts").select("*").eq("id", params.id).maybeSingle();

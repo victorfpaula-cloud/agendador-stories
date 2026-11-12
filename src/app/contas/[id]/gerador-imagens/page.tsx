@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { GERADOR_ATIVO } from "@/lib/funcoesEmStandby";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Account, GeradorMarca, ImagemGerada } from "@/types/database";
 import { BUCKET_GERADOR } from "@/lib/geradorImagens";
@@ -12,6 +13,7 @@ import GeradorClient from "./GeradorClient";
 export const dynamic = "force-dynamic";
 
 export default async function GeradorImagensPage({ params }: { params: { id: string } }) {
+  if (!GERADOR_ATIVO) redirect(`/contas/${params.id}`);
   const admin = createAdminClient();
 
   const { data: conta } = await admin.from("accounts").select("id, name").eq("id", params.id).maybeSingle();

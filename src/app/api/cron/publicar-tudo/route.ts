@@ -5,6 +5,7 @@ import { executarPublicarFeed } from "@/lib/engines/publicarFeed";
 import { executarPublicarStoriesDrive } from "@/lib/engines/publicarStoriesDrive";
 import { executarPublicarStoriesCiclo } from "@/lib/engines/publicarStoriesCiclo";
 import { executarPublicarStoriesUnico } from "@/lib/engines/publicarStoriesUnico";
+import { AUTOSTORY_ATIVO } from "@/lib/funcoesEmStandby";
 import { executarStoryWeather } from "@/lib/engines/publicarStoryWeather";
 
 // Chamada única que roda os 4 motores de publicação (Stories semanal,
@@ -55,7 +56,7 @@ async function executar(req: NextRequest) {
   const [storiesSemanal, feed, storiesDrive, storiesCiclo, storiesUnico, storyWeather] = await Promise.all([
     comSeguranca("Stories semanal", () => executarPublicarStoriesSemanal(admin)),
     comSeguranca("AutoFeed", () => executarPublicarFeed(admin)),
-    comSeguranca("AutoStory", () => executarPublicarStoriesDrive(admin)),
+    comSeguranca("AutoStory", async () => (AUTOSTORY_ATIVO ? executarPublicarStoriesDrive(admin) : { standby: true })),
     comSeguranca("Story Engine", () => executarPublicarStoriesCiclo(admin)),
     comSeguranca("Agendamento Único", () => executarPublicarStoriesUnico(admin)),
     comSeguranca("Story Weather", () => executarStoryWeather(admin)),
