@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Account, StoryCicloCategoria } from "@/types/database";
 import ContaTabs from "../ContaTabs";
+import StoryWeather from "./StoryWeather";
 import CicloClient, { type CategoriaComHorarios, type Contagem } from "./CicloClient";
 
 // Story Engine: banco de imagens/vídeos por categoria, que gira sem repetir.
@@ -59,6 +60,8 @@ export default async function StoryCicloPage({ params }: { params: { id: string 
           Não consegui carregar as categorias ({error.message}).
         </div>
       )}
+
+      <StoryWeather accountId={params.id} />
 
       <CicloClient
         accountId={params.id}
