@@ -312,7 +312,7 @@ function ContaCard({
         </div>
       )}
 
-      <ResumoDoDiaPainel resumo={resumo} engine={storyEngineHoje} diaHoje={diaHoje} />
+      <ResumoDoDiaPainel resumo={resumo} engine={storyEngineHoje} diaHoje={diaHoje} pausada={!conta.is_active} />
 
       <div className="mt-4 flex items-center gap-3 border-t border-slate-100 pt-3">
         <button
@@ -356,11 +356,22 @@ function ResumoDoDiaPainel({
   resumo,
   engine,
   diaHoje,
+  pausada,
 }: {
   resumo: ResumoDoDia;
   engine: ResumoStoryEngine | undefined;
   diaHoje: number;
+  pausada: boolean;
 }) {
+  // Conta pausada não publica nada: mostrar "0 de 7 postados" enganava.
+  if (pausada) {
+    return (
+      <div className="mt-3 rounded-lg bg-slate-50 px-2.5 py-2 text-xs text-slate-400">
+        {nomeDia(diaHoje)} · conta pausada, nada é publicado
+      </div>
+    );
+  }
+
   const agendados = resumo.total;
   const engineTotal = engine?.agendados ?? 0;
   const total = agendados + engineTotal;
