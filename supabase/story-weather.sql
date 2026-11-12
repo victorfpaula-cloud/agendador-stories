@@ -20,6 +20,8 @@ create table public.story_weather_config (
   frio_confirmacoes int not null default 0,
   -- estado do motor: leituras seguidas com chuva (precisa de 2) e a última leitura
   chuva_confirmacoes int not null default 0,
+  chuva_desde timestamptz,                    -- início da sequência atual de leituras com chuva
+  chuva_horas jsonb not null default '[]',    -- horas de previsão diferentes que indicaram chuva na sequência
   ultima_checagem timestamptz,
   ultima_leitura jsonb,
   updated_at timestamptz not null default now()

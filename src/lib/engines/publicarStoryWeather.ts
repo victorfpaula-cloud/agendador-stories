@@ -4,12 +4,24 @@ import { publicarStory, MetaApiError } from "@/lib/meta";
 import { crossPostStoryFacebook } from "@/lib/crossPostStoryFacebook";
 import { enviarEmail } from "@/lib/email";
 import { carregarDiasFechados, chaveDiaFechado } from "@/lib/diasFechados";
-import { indicaCalor, indicaChuva, indicaFrio, lerPrevisao, type Leitura } from "@/lib/weather";
+import {
+  CHUVA_MIN_HORAS_DIFERENTES,
+  CHUVA_MIN_LEITURAS,
+  CHUVA_MIN_MINUTOS,
+  indicaCalor,
+  indicaChuva,
+  indicaFrio,
+  lerPrevisao,
+  lerSegundaFonte,
+  type Leitura,
+} from "@/lib/weather";
 import type { Account } from "@/types/database";
 
 // Story Weather: publica um Story pronto quando o tempo combina.
-//  - Chuva: só depois de DUAS leituras seguidas (≥10 min entre elas) indicando
-//    chuva; no máximo N por dia e com ≥3h entre um e outro.
+//  - Chuva: só com chuva SUSTENTADA — leituras seguidas indicando chuva por
+//    pelo menos 1 hora, em 2 horas de previsão diferentes, e (se a chave
+//    OPENWEATHER_API_KEY existir) com a segunda fonte concordando. Uma leitura
+//    sem chuva zera a contagem. No máximo N por dia, com ≥3h entre uma e outra.
 //  - Calor: uma vez por dia, quando a máxima prevista pra hoje bate o valor
 //    configurado.
 //  - Só UM tipo por dia: se chuva, calor ou frio já saiu hoje, os outros não saem.
@@ -35,6 +47,8 @@ type Config = {
   frio_graus: number;
   frio_confirmacoes: number;
   chuva_confirmacoes: number;
+  chuva_desde: string | null;
+  chuva_horas: string[] | null;
   ultima_checagem: string | null;
   accounts: Account;
 };
@@ -120,7 +134,9 @@ export async function executarStoryWeather(admin: Admin) {
     try {
       if (agoraMin < minutos(cfg.janela_inicio) || agoraMin > minutos(cfg.janela_fim)) {
         resultados[chave] = "fora_da_janela";
-        if (cfg.chuva_confirmacoes !== 0 || cfg.frio_confirmacoes !== 0) await admin.from("story_weather_config").update({ chuva_confirmacoes: 0, frio_confirmacoes: 0 }).eq("account_id", cfg.account_id);
+        if (cfg.chuva_confirmacoes !== 0 || cfg.frio_confirmacoes !== 0) {
+          await admin.from("story_weather_config").update({ chuva_confirmacoes: 0, frio_confirmacoes: 0, chuva_desde: null, chuva_horas: [] }).eq("account_id", cfg.account_id);
+        }
         continue;
       }
       if (fechados.has(chaveDiaFechado(conta.id, dataISO))) {
@@ -140,22 +156,43 @@ export async function executarStoryWeather(admin: Admin) {
         const msg = err instanceof Error ? err.message : "Erro ao ler a previsão.";
         await admin
           .from("story_weather_config")
-          .update({ chuva_confirmacoes: 0, frio_confirmacoes: 0, ultima_checagem: new Date().toISOString(), ultima_leitura: { erro: msg } })
+          .update({ chuva_confirmacoes: 0, frio_confirmacoes: 0, chuva_desde: null, chuva_horas: [], ultima_checagem: new Date().toISOString(), ultima_leitura: { erro: msg } })
           .eq("account_id", cfg.account_id);
         resultados[chave] = "sem_previsao";
         continue;
       }
 
-      const chovendo = cfg.chuva_ativa && indicaChuva(leitura);
+      // Chuva: a previsão indica chuva E (se houver) a segunda fonte concorda.
+      // Só vale como "positiva" a leitura que passa nos dois; qualquer leitura
+      // sem chuva zera a sequência.
+      const chovendoPrevisao = cfg.chuva_ativa && indicaChuva(leitura);
+      const segunda = chovendoPrevisao ? await lerSegundaFonte(Number(cfg.latitude), Number(cfg.longitude)) : null;
+      const chovendo = chovendoPrevisao && (!segunda?.disponivel || segunda.chovendo === true);
       const confirmacoes = chovendo ? cfg.chuva_confirmacoes + 1 : 0;
+      const chuvaDesde = chovendo ? cfg.chuva_desde ?? new Date().toISOString() : null;
+      const horasComChuva = chovendo ? Array.from(new Set([...(cfg.chuva_horas ?? []), leitura.hora_prevista])) : [];
       const fazFrio = cfg.frio_ativo && indicaFrio(leitura, cfg.frio_graus);
       const confirmacoesFrio = fazFrio ? cfg.frio_confirmacoes + 1 : 0;
       await admin
         .from("story_weather_config")
-        .update({ chuva_confirmacoes: confirmacoes, frio_confirmacoes: confirmacoesFrio, ultima_checagem: new Date().toISOString(), ultima_leitura: leitura })
+        .update({
+          chuva_confirmacoes: confirmacoes,
+          chuva_desde: chuvaDesde,
+          chuva_horas: horasComChuva,
+          frio_confirmacoes: confirmacoesFrio,
+          ultima_checagem: new Date().toISOString(),
+          ultima_leitura: { ...leitura, segunda_fonte: segunda },
+        })
         .eq("account_id", cfg.account_id);
 
-      if (cfg.chuva_ativa && confirmacoes >= 2) {
+      const chuvaSustentada =
+        chovendo &&
+        confirmacoes >= CHUVA_MIN_LEITURAS &&
+        !!chuvaDesde &&
+        Date.now() - new Date(chuvaDesde).getTime() >= CHUVA_MIN_MINUTOS * 60_000 &&
+        horasComChuva.length >= CHUVA_MIN_HORAS_DIFERENTES;
+
+      if (cfg.chuva_ativa && chuvaSustentada) {
         resultados[chave] = `chuva:${await tentarPublicar(admin, conta, cfg, "chuva", dataISO, leitura)}`;
       } else if (cfg.calor_ativo && indicaCalor(leitura, cfg.calor_graus)) {
         resultados[chave] = `calor:${await tentarPublicar(admin, conta, cfg, "calor", dataISO, leitura)}`;
