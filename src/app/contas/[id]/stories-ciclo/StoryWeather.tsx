@@ -30,7 +30,7 @@ type Teste = {
 
 const PADRAO: Config = {
   ativo: false, cidade: null, chuva_ativa: true, calor_ativo: false, calor_graus: 34,
-  janela_inicio: "09:00", janela_fim: "20:00", max_chuva_por_dia: 1, ultima_checagem: null, ultima_leitura: null,
+  janela_inicio: "09:00", janela_fim: "22:00", max_chuva_por_dia: 1, ultima_checagem: null, ultima_leitura: null,
 };
 
 async function api(url: string, init?: RequestInit) {

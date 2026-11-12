@@ -13,7 +13,7 @@ create table public.story_weather_config (
   calor_ativo boolean not null default false,
   calor_graus int not null default 34,
   janela_inicio time not null default '09:00',
-  janela_fim time not null default '20:00',
+  janela_fim time not null default '22:00',
   max_chuva_por_dia int not null default 1,
   -- estado do motor: leituras seguidas com chuva (precisa de 2) e a última leitura
   chuva_confirmacoes int not null default 0,

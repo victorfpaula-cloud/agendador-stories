@@ -69,7 +69,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     if (!body.ativo) campos.chuva_confirmacoes = 0;
   }
   const inicio = String(campos.janela_inicio ?? atual?.janela_inicio ?? "09:00").slice(0, 5);
-  const fim = String(campos.janela_fim ?? atual?.janela_fim ?? "20:00").slice(0, 5);
+  const fim = String(campos.janela_fim ?? atual?.janela_fim ?? "22:00").slice(0, 5);
   if (inicio >= fim) return NextResponse.json({ erro: "O horário final deve ser depois do inicial." }, { status: 400 });
 
   const { data, error } = await admin
