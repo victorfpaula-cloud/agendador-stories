@@ -70,6 +70,12 @@ export default function ListaContas({
     Object.fromEntries(initialContas.map((c) => [c.id, c.avatar_url ?? null]))
   );
 
+  // Ativas primeiro (em ordem alfabética), pausadas por último — reordena na
+  // hora quando uma conta é pausada ou retomada.
+  const contasOrdenadas = [...contas].sort(
+    (a, b) => Number(b.is_active) - Number(a.is_active) || a.name.localeCompare(b.name, "pt-BR")
+  );
+
   function aoAtualizar(conta: Account) {
     setContas((atual) => atual.map((c) => (c.id === conta.id ? conta : c)));
   }
@@ -146,7 +152,7 @@ export default function ListaContas({
 
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-      {contas.map((conta) => (
+      {contasOrdenadas.map((conta) => (
         <ContaCard
           key={conta.id}
           conta={conta}
