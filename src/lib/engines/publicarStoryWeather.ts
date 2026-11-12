@@ -12,6 +12,7 @@ import type { Account } from "@/types/database";
 //    chuva; no máximo N por dia e com ≥3h entre um e outro.
 //  - Calor: uma vez por dia, quando a máxima prevista pra hoje bate o valor
 //    configurado.
+//  - Só UM tipo por dia: se chuva, calor ou frio já saiu hoje, os outros não saem.
 //  - Frio: uma vez por dia, quando a temperatura de agora está no valor
 //    configurado ou abaixo, confirmada em duas leituras seguidas.
 // Só age dentro da janela de horário da conta, respeita conta pausada e dia
@@ -181,13 +182,18 @@ async function tentarPublicar(
 ): Promise<string> {
   if (!(await contaPublicouHoje(admin, conta.id, dia))) return "sem_publicacao_hoje";
 
-  const { data: antes } = await admin
+  const { data: doDia } = await admin
     .from("story_weather_posts")
-    .select("seq, status, created_at")
+    .select("tipo, seq, status, created_at")
     .eq("account_id", conta.id)
-    .eq("tipo", tipo)
     .eq("dia", dia);
-  const registros = (antes ?? []) as { seq: number; status: string; created_at: string }[];
+  const todos = (doDia ?? []) as { tipo: string; seq: number; status: string; created_at: string }[];
+
+  // Regra do Victor: chuva, calor e frio nunca saem no mesmo dia. Se outro
+  // tipo já publicou (ou está publicando) hoje, este não sai.
+  if (todos.some((r) => r.tipo !== tipo && r.status !== "error")) return "outro_tipo_ja_publicou";
+
+  const registros = todos.filter((r) => r.tipo === tipo);
 
   const ocupados = registros.filter((r) => r.status !== "error");
   const erros = registros.filter((r) => r.status === "error").length;

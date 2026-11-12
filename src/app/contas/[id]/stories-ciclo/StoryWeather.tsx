@@ -205,6 +205,8 @@ export default function StoryWeather({ accountId }: { accountId: string }) {
 
       {aberto && carregado && (
         <div className="mt-4 space-y-4 border-t border-sky-200 pt-4">
+          <p className="rounded-md bg-white px-3 py-2 text-xs text-slate-600 ring-1 ring-slate-200">Chuva, calor e frio nunca saem no mesmo dia: o primeiro que acontecer é o único do dia.</p>
+
           <div>
             <span className="mb-1 block text-xs font-medium text-slate-600">Cidade {config.cidade ? `· atual: ${config.cidade}` : ""}</span>
             <div className="flex gap-2">
