@@ -116,16 +116,19 @@ export default function StoryWeather({ accountId }: { accountId: string }) {
     }
   }
 
-  async function enviar(tipo: "chuva" | "calor" | "frio", files: FileList | null) {
-    if (!files || files.length === 0) return;
-    if (!(await confirmarProporcaoStory(Array.from(files)))) return;
+  async function enviar(tipo: "chuva" | "calor" | "frio", selecionados: FileList | null) {
+    // Copia a lista já: o campo de arquivo é limpo logo após a escolha, e uma
+    // FileList "viva" esvaziaria antes do envio começar.
+    const arquivos = selecionados ? Array.from(selecionados) : [];
+    if (arquivos.length === 0) return;
+    if (!(await confirmarProporcaoStory(arquivos))) return;
     setOcupado(true);
     setErro(null);
     try {
       const enviados = [];
-      for (let i = 0; i < files.length; i++) {
-        setProgresso(`Enviando ${i + 1} de ${files.length}…`);
-        const arq = await prepararImagem(files[i]);
+      for (let i = 0; i < arquivos.length; i++) {
+        setProgresso(`Enviando ${i + 1} de ${arquivos.length}…`);
+        const arq = await prepararImagem(arquivos[i]);
         const thumbnailDataUrl = await gerarThumbnail(arq);
         const r = await enviarMidiaDireto(arq, { bucket: "story-media", pasta: `weather/${accountId}/${tipo}` });
         enviados.push({ ...r, thumbnailDataUrl });
