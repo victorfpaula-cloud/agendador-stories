@@ -233,6 +233,8 @@ export interface StoryCicloItem {
   media_type: MediaType;
   thumbnail_data_url: string | null;
   usado_em: string | null;
+  // Quantas vezes a imagem já foi publicada (adesivo no canto da miniatura).
+  vezes_usado: number;
   created_at: string;
 }
 

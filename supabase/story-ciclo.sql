@@ -151,3 +151,8 @@ create index story_ciclo_posts_status_idx on public.story_ciclo_posts (status, s
 -- (bucket: insert into storage.buckets (id, name, public) values ('story-backup','story-backup',false);)
 -- itens_ciclo_sem_backup(limite)    -> itens com arquivo no story-media e sem cópia
 -- itens_ciclo_para_restaurar(limite) -> itens sem arquivo no story-media mas COM cópia
+
+-- Contador de usos por imagem (adesivo na galeria do Story Engine, 24/10/2026).
+-- Já aplicado em produção (migração "story_ciclo_item_vezes_usado"):
+--   alter table public.story_ciclo_item add column vezes_usado int not null default 0;
+--   função public.incrementar_uso_item_ciclo(p_item_id uuid): soma 1 ao publicar.

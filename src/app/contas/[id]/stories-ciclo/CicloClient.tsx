@@ -554,8 +554,15 @@ function CategoriaCard({
                       sem arquivo
                     </span>
                   )}
-                  {!item.usado_em && (
+                  {!item.usado_em ? (
                     <span className="absolute left-0.5 top-0.5 rounded bg-green-600/90 px-1 text-[9px] font-medium text-white">nova</span>
+                  ) : (
+                    <span
+                      className="absolute left-0.5 top-0.5 min-w-[14px] rounded-full bg-slate-800/80 px-1 text-center text-[9px] font-semibold leading-[14px] text-white"
+                      title={`Publicada ${Math.max(item.vezes_usado ?? 0, 1)} vez(es)`}
+                    >
+                      {Math.max(item.vezes_usado ?? 0, 1)}
+                    </span>
                   )}
                   <button
                     type="button"

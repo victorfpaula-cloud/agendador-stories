@@ -172,6 +172,15 @@ export async function executarPublicarStoriesCiclo(admin: ReturnType<typeof crea
         .update({ status: "success", ig_media_id: igMediaId, published_at: new Date().toISOString(), error_message: null })
         .eq("id", item.id);
 
+      // Conta mais um uso da imagem (adesivo da galeria). Relê o item do post:
+      // se a imagem foi trocada pela próxima da fila, vale a que saiu de fato.
+      try {
+        const { data: usado } = await admin.from("story_ciclo_posts").select("item_id").eq("id", item.id).single();
+        if (usado?.item_id) await admin.rpc("incrementar_uso_item_ciclo", { p_item_id: usado.item_id });
+      } catch {
+        // Contador é só enfeite: nunca atrapalha a publicação.
+      }
+
       // Antes de apagar a cópia abaixo: o Facebook também precisa buscar a mídia.
       await crossPostStoryFacebook(admin, {
         conta,
