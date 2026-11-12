@@ -18,7 +18,7 @@ export async function buscarStoryEngineHoje(
   const [{ data: horarios }, { data: categorias }, { data: postsHoje }] = await Promise.all([
     admin.from("story_ciclo_horario").select("id, category_id").eq("is_active", true),
     admin.from("story_ciclo_categoria").select("id, account_id, dias_semana").eq("ativa", true),
-    admin.from("story_ciclo_posts").select("account_id, status").eq("dia", dataISO),
+    admin.from("story_ciclo_posts").select("account_id, horario_id, status").eq("dia", dataISO),
   ]);
 
   const categoriasPorId = new Map<string, { account_id: string; dias_semana: number[] }>();
@@ -27,16 +27,29 @@ export async function buscarStoryEngineHoje(
   }
 
   const resultado: Record<string, { agendados: number; postados: number }> = {};
+  const agendadosIds = new Set<string>();
   for (const h of (horarios ?? []) as { id: string; category_id: string }[]) {
     const categoria = categoriasPorId.get(h.category_id);
     if (!categoria || !categoria.dias_semana.includes(diaSemanaIso)) continue;
     if (!resultado[categoria.account_id]) resultado[categoria.account_id] = { agendados: 0, postados: 0 };
     resultado[categoria.account_id].agendados += 1;
+    agendadosIds.add(h.id);
   }
 
-  for (const p of (postsHoje ?? []) as { account_id: string; status: string }[]) {
-    if (!resultado[p.account_id]) continue;
-    if (p.status === "success") resultado[p.account_id].postados += 1;
+  // Cada horário conta uma vez só. Story de hoje já publicado por um horário
+  // que depois foi removido/pausado conta nos dois lados (nunca "3 de 2").
+  const contados = new Set<string>();
+  for (const p of (postsHoje ?? []) as { account_id: string; horario_id: string | null; status: string }[]) {
+    if (p.status !== "success") continue;
+    if (p.horario_id && agendadosIds.has(p.horario_id)) {
+      if (contados.has(p.horario_id)) continue;
+      contados.add(p.horario_id);
+      if (resultado[p.account_id]) resultado[p.account_id].postados += 1;
+    } else {
+      if (!resultado[p.account_id]) resultado[p.account_id] = { agendados: 0, postados: 0 };
+      resultado[p.account_id].agendados += 1;
+      resultado[p.account_id].postados += 1;
+    }
   }
 
   return resultado;

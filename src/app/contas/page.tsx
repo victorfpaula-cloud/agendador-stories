@@ -1,5 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { agoraEmSaoPaulo } from "@/lib/days";
+import { calcularResumoSemanal } from "@/lib/resumoDoDia";
+import { carregarDiasFechados } from "@/lib/diasFechados";
 import { AUTOSTORY_ATIVO } from "@/lib/funcoesEmStandby";
 import { buscarStoryEngineHoje } from "@/lib/storyCicloResumo";
 import type { ContaPublica } from "@/types/database";
@@ -27,33 +29,30 @@ export default async function ContasPage({
     storyDriveConfigs,
     storiesHojeData,
     storyEngineHoje,
+    fechados,
   ] = await Promise.all([
     admin
       .from("accounts")
       .select("id, name, page_id, ig_user_id, ig_username, is_active, token_obtained_at, avatar_url, avatar_atualizado_em, created_at, cross_post_facebook, cross_post_facebook_stories")
       .order("name", { ascending: true }),
-    admin.from("schedule_slots").select("account_id").eq("day_of_week", diaSemanaIso).eq("is_active", true),
-    admin.from("publish_log").select("account_id, status").eq("scheduled_for", dataISO),
+    admin.from("schedule_slots").select("id, account_id").eq("day_of_week", diaSemanaIso).eq("is_active", true),
+    admin.from("publish_log").select("account_id, slot_id, status").eq("scheduled_for", dataISO),
     // AutoStory está em stand-by: sem consulta nenhuma enquanto estiver.
     AUTOSTORY_ATIVO ? admin.from("story_drive_config").select("account_id").then((r) => r.data) : Promise.resolve([]),
     AUTOSTORY_ATIVO ? admin.from("story_posts").select("account_id, status").eq("dia", dataISO).then((r) => r.data) : Promise.resolve([]),
     buscarStoryEngineHoje(admin, diaSemanaIso, dataISO),
+    carregarDiasFechados(admin, [dataISO]),
   ]);
 
   const lista = (contas ?? []) as unknown as ContaPublica[];
 
-  const resumoHoje: Record<string, ResumoDoDia> = {};
-  for (const conta of lista) {
-    resumoHoje[conta.id] = { total: 0, postados: 0, erros: 0 };
-  }
-  for (const slot of (slotsHojeData ?? []) as { account_id: string }[]) {
-    if (resumoHoje[slot.account_id]) resumoHoje[slot.account_id].total += 1;
-  }
-  for (const log of (logsHojeData ?? []) as { account_id: string | null; status: string }[]) {
-    if (!log.account_id || !resumoHoje[log.account_id]) continue;
-    if (log.status === "success") resumoHoje[log.account_id].postados += 1;
-    if (log.status === "error") resumoHoje[log.account_id].erros += 1;
-  }
+  const resumoHoje: Record<string, ResumoDoDia> = calcularResumoSemanal(
+    lista.map((c) => c.id),
+    (slotsHojeData ?? []) as { id: string; account_id: string }[],
+    (logsHojeData ?? []) as { account_id: string | null; slot_id: string | null; status: string }[],
+    fechados,
+    dataISO
+  );
 
   // Quantos Stories automáticos do Drive já saíram hoje, por conta (só pras
   // contas com essa automação configurada).

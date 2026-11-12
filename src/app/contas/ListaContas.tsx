@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { nomeDia } from "@/lib/days";
 import type { ContaPublica as Account } from "@/types/database";
 
-export type ResumoDoDia = { total: number; postados: number; erros: number };
+export type ResumoDoDia = { total: number; postados: number; erros: number; fechado?: boolean };
 
 // Intervalo do "recheck" automático do resumo do dia. Não é tempo real de
 // verdade (o servidor não avisa o navegador na hora que publica) — é um
@@ -371,12 +371,19 @@ function ResumoDoDiaPainel({
       </div>
     );
   }
+  if (resumo.fechado) {
+    return (
+      <div className="mt-3 rounded-lg bg-slate-50 px-2.5 py-2 text-xs text-slate-400">
+        {nomeDia(diaHoje)} · dia fechado, nada é publicado hoje
+      </div>
+    );
+  }
 
   const agendados = resumo.total;
   const engineTotal = engine?.agendados ?? 0;
   const total = agendados + engineTotal;
-  const postadosAgendados = resumo.postados;
-  const postadosEngine = engine?.postados ?? 0;
+  const postadosAgendados = Math.min(resumo.postados, agendados);
+  const postadosEngine = Math.min(engine?.postados ?? 0, engineTotal);
   const erros = resumo.erros;
 
   if (total === 0) {
@@ -387,12 +394,13 @@ function ResumoDoDiaPainel({
     );
   }
 
-  const pct = (n: number) => Math.min(100, (n / total) * 100);
-  const pctVerde = pct(postadosAgendados);
-  const pctRoxo = Math.min(100 - pctVerde, pct(postadosEngine));
-  const pctErro = Math.min(100 - pctVerde - pctRoxo, pct(erros));
+  const pct = (n: number, de: number) => (de > 0 ? Math.min(100, (n / de) * 100) : 0);
+  const pctErro = Math.min(100 - pct(postadosAgendados, agendados), pct(erros, agendados));
   const postados = postadosAgendados + postadosEngine;
 
+  // A barra é dividida em duas zonas, uma por tipo (verde = agendados,
+  // roxo = Story Engine), cada uma do tamanho da sua parte do dia e
+  // enchendo conforme os Stories dela saem. Só um tipo = barra inteira da cor dele.
   return (
     <div className="mt-3 rounded-lg bg-slate-50 px-2.5 py-2 text-xs">
       <div className="mb-1.5 flex items-center justify-between gap-2">
@@ -402,17 +410,33 @@ function ResumoDoDiaPainel({
           {erros > 0 && <span className="text-red-500"> · {erros} com erro</span>}
         </span>
       </div>
-      <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-slate-200">
-        <div className="h-full bg-green-500 transition-all" style={{ width: `${pctVerde}%` }} />
-        <div className="h-full bg-violet-600 transition-all" style={{ width: `${pctRoxo}%` }} />
-        <div className="h-full bg-red-500 transition-all" style={{ width: `${pctErro}%` }} />
+      <div className="flex h-1.5 w-full gap-0.5">
+        {agendados > 0 && (
+          <div className="flex overflow-hidden rounded-full bg-green-100" style={{ width: `${(agendados / total) * 100}%` }}>
+            <div className="h-full bg-green-500 transition-all" style={{ width: `${pct(postadosAgendados, agendados)}%` }} />
+            <div className="h-full bg-red-500 transition-all" style={{ width: `${pctErro}%` }} />
+          </div>
+        )}
+        {engineTotal > 0 && (
+          <div className="flex overflow-hidden rounded-full bg-violet-100" style={{ width: `${(engineTotal / total) * 100}%` }}>
+            <div className="h-full bg-violet-600 transition-all" style={{ width: `${pct(postadosEngine, engineTotal)}%` }} />
+          </div>
+        )}
       </div>
-      {agendados > 0 && engineTotal > 0 && (
-        <div className="mt-1.5 flex gap-3 text-[10px] text-slate-400">
-          <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-green-500" />{postadosAgendados}/{agendados} agendados</span>
-          <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-violet-600" />{postadosEngine}/{engineTotal} Story Engine</span>
-        </div>
-      )}
+      <div className="mt-1.5 flex gap-3 text-[10px] text-slate-400">
+        {agendados > 0 && (
+          <span className="flex items-center gap-1">
+            <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+            {postadosAgendados}/{agendados} agendados
+          </span>
+        )}
+        {engineTotal > 0 && (
+          <span className="flex items-center gap-1">
+            <span className="h-1.5 w-1.5 rounded-full bg-violet-600" />
+            {postadosEngine}/{engineTotal} Story Engine
+          </span>
+        )}
+      </div>
     </div>
   );
 }

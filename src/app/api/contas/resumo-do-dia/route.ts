@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { agoraEmSaoPaulo } from "@/lib/days";
 import { AUTOSTORY_ATIVO } from "@/lib/funcoesEmStandby";
+import { calcularResumoSemanal } from "@/lib/resumoDoDia";
+import { carregarDiasFechados } from "@/lib/diasFechados";
 import { buscarStoryEngineHoje } from "@/lib/storyCicloResumo";
 
 export const dynamic = "force-dynamic";
@@ -18,28 +20,24 @@ export async function GET() {
 
   // Consultas em paralelo (antes uma depois da outra). AutoStory em stand-by
   // não consulta nada.
-  const [{ data: contas }, { data: slotsHojeData }, { data: logsHojeData }, storyDriveConfigs, storiesHojeData, storyEngineHoje] =
+  const [{ data: contas }, { data: slotsHojeData }, { data: logsHojeData }, storyDriveConfigs, storiesHojeData, storyEngineHoje, fechados] =
     await Promise.all([
       admin.from("accounts").select("id"),
-      admin.from("schedule_slots").select("account_id").eq("day_of_week", diaSemanaIso).eq("is_active", true),
-      admin.from("publish_log").select("account_id, status").eq("scheduled_for", dataISO),
+      admin.from("schedule_slots").select("id, account_id").eq("day_of_week", diaSemanaIso).eq("is_active", true),
+      admin.from("publish_log").select("account_id, slot_id, status").eq("scheduled_for", dataISO),
       AUTOSTORY_ATIVO ? admin.from("story_drive_config").select("account_id").then((r) => r.data) : Promise.resolve([]),
       AUTOSTORY_ATIVO ? admin.from("story_posts").select("account_id, status").eq("dia", dataISO).then((r) => r.data) : Promise.resolve([]),
       buscarStoryEngineHoje(admin, diaSemanaIso, dataISO),
+      carregarDiasFechados(admin, [dataISO]),
     ]);
 
-  const resumo: Record<string, { total: number; postados: number; erros: number }> = {};
-  for (const conta of (contas ?? []) as { id: string }[]) {
-    resumo[conta.id] = { total: 0, postados: 0, erros: 0 };
-  }
-  for (const slot of (slotsHojeData ?? []) as { account_id: string }[]) {
-    if (resumo[slot.account_id]) resumo[slot.account_id].total += 1;
-  }
-  for (const log of (logsHojeData ?? []) as { account_id: string | null; status: string }[]) {
-    if (!log.account_id || !resumo[log.account_id]) continue;
-    if (log.status === "success") resumo[log.account_id].postados += 1;
-    if (log.status === "error") resumo[log.account_id].erros += 1;
-  }
+  const resumo = calcularResumoSemanal(
+    ((contas ?? []) as { id: string }[]).map((c) => c.id),
+    (slotsHojeData ?? []) as { id: string; account_id: string }[],
+    (logsHojeData ?? []) as { account_id: string | null; slot_id: string | null; status: string }[],
+    fechados,
+    dataISO
+  );
 
   // Mesma ideia do resumo acima, mas pro card do robô do Story Automático
   // Drive (só aparece pras contas que têm essa automação configurada).
