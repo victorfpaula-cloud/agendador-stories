@@ -8,20 +8,20 @@ import {
   CHUVA_MIN_HORAS_DIFERENTES,
   CHUVA_MIN_LEITURAS,
   CHUVA_MIN_MINUTOS,
+  chuvaVaiContinuar,
   indicaCalor,
   indicaChuva,
   indicaFrio,
   lerPrevisao,
-  lerSegundaFonte,
   type Leitura,
 } from "@/lib/weather";
 import type { Account } from "@/types/database";
 
 // Story Weather: publica um Story pronto quando o tempo combina.
-//  - Chuva: só com chuva SUSTENTADA — leituras seguidas indicando chuva por
-//    pelo menos 1 hora, em 2 horas de previsão diferentes, e (se a chave
-//    OPENWEATHER_API_KEY existir) com a segunda fonte concordando. Uma leitura
-//    sem chuva zera a contagem. No máximo N por dia, com ≥3h entre uma e outra.
+//  - Chuva: só em dia CHUVOSO — leituras seguidas indicando chuva por pelo
+//    menos 90 min (em 2 horas de previsão diferentes) e chuva prevista em pelo
+//    menos 4 das próximas 6 horas. Uma leitura sem chuva zera a contagem.
+//    No máximo N por dia, com ≥3h entre uma e outra.
 //  - Calor: uma vez por dia, quando a máxima prevista pra hoje bate o valor
 //    configurado.
 //  - Só UM tipo por dia: se chuva, calor ou frio já saiu hoje, os outros não saem.
@@ -162,12 +162,9 @@ export async function executarStoryWeather(admin: Admin) {
         continue;
       }
 
-      // Chuva: a previsão indica chuva E (se houver) a segunda fonte concorda.
-      // Só vale como "positiva" a leitura que passa nos dois; qualquer leitura
-      // sem chuva zera a sequência.
-      const chovendoPrevisao = cfg.chuva_ativa && indicaChuva(leitura);
-      const segunda = chovendoPrevisao ? await lerSegundaFonte(Number(cfg.latitude), Number(cfg.longitude)) : null;
-      const chovendo = chovendoPrevisao && (!segunda?.disponivel || segunda.chovendo === true);
+      // Chuva: só vale como "positiva" a leitura que indica chuva agora;
+      // qualquer leitura sem chuva zera a sequência.
+      const chovendo = cfg.chuva_ativa && indicaChuva(leitura);
       const confirmacoes = chovendo ? cfg.chuva_confirmacoes + 1 : 0;
       const chuvaDesde = chovendo ? cfg.chuva_desde ?? new Date().toISOString() : null;
       const horasComChuva = chovendo ? Array.from(new Set([...(cfg.chuva_horas ?? []), leitura.hora_prevista])) : [];
@@ -181,7 +178,7 @@ export async function executarStoryWeather(admin: Admin) {
           chuva_horas: horasComChuva,
           frio_confirmacoes: confirmacoesFrio,
           ultima_checagem: new Date().toISOString(),
-          ultima_leitura: { ...leitura, segunda_fonte: segunda },
+          ultima_leitura: leitura,
         })
         .eq("account_id", cfg.account_id);
 
@@ -190,7 +187,8 @@ export async function executarStoryWeather(admin: Admin) {
         confirmacoes >= CHUVA_MIN_LEITURAS &&
         !!chuvaDesde &&
         Date.now() - new Date(chuvaDesde).getTime() >= CHUVA_MIN_MINUTOS * 60_000 &&
-        horasComChuva.length >= CHUVA_MIN_HORAS_DIFERENTES;
+        horasComChuva.length >= CHUVA_MIN_HORAS_DIFERENTES &&
+        chuvaVaiContinuar(leitura);
 
       if (cfg.chuva_ativa && chuvaSustentada) {
         resultados[chave] = `chuva:${await tentarPublicar(admin, conta, cfg, "chuva", dataISO, leitura)}`;

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { agoraEmSaoPaulo } from "@/lib/days";
 import { contaPublicouHoje } from "@/lib/engines/publicarStoryWeather";
-import { CHUVA_MIN_LEITURAS, CHUVA_MIN_MINUTOS, CHUVA_MIN_MM, indicaCalor, indicaChuva, indicaFrio, lerPrevisao, lerSegundaFonte } from "@/lib/weather";
+import { CHUVA_MIN_HORAS_FUTURAS, CHUVA_MIN_LEITURAS, CHUVA_MIN_MINUTOS, CHUVA_MIN_MM, chuvaVaiContinuar, indicaCalor, indicaChuva, indicaFrio, lerPrevisao } from "@/lib/weather";
 
 // "Testar agora": lê a previsão da cidade configurada e mostra o que o robô
 // decidiria, SEM publicar nada.
@@ -19,7 +19,8 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       chuva: {
         indica: indicaChuva(leitura),
         minimo_mm: CHUVA_MIN_MM,
-        segunda_fonte: indicaChuva(leitura) ? await lerSegundaFonte(Number(cfg.latitude), Number(cfg.longitude)) : null,
+        vai_continuar: chuvaVaiContinuar(leitura),
+        minimo_horas_futuras: CHUVA_MIN_HORAS_FUTURAS,
         sequencia: { leituras: cfg.chuva_confirmacoes, desde: cfg.chuva_desde, minimo_leituras: CHUVA_MIN_LEITURAS, minimo_minutos: CHUVA_MIN_MINUTOS },
       },
       calor: { indica: indicaCalor(leitura, cfg.calor_graus), graus: cfg.calor_graus },

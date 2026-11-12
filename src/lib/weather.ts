@@ -14,6 +14,8 @@ export type Leitura = {
   chuva_mm_proxima_hora: number | null;
   simbolo_proxima_hora: string | null;
   temperatura_max_hoje: number | null;
+  // Quantas das próximas 6 horas têm chuva prevista (≥ CHUVA_HORA_MIN_MM).
+  horas_com_chuva_proximas_6h: number;
 };
 
 type Ponto = {
@@ -46,6 +48,10 @@ export async function lerPrevisao(latitude: number, longitude: number): Promise<
   const temps = serie.filter((p) => diaEmSP(p.time) === hoje).map((p) => p.data.instant?.details?.air_temperature).filter((t): t is number => typeof t === "number");
 
   const chuva = atual.data.next_1_hours?.details?.precipitation_amount;
+  const inicio = serie.indexOf(atual);
+  const horasComChuva = serie
+    .slice(inicio, inicio + 6)
+    .filter((p) => (p.data.next_1_hours?.details?.precipitation_amount ?? 0) >= CHUVA_HORA_MIN_MM).length;
   return {
     lido_em: new Date().toISOString(),
     hora_prevista: atual.time,
@@ -53,19 +59,31 @@ export async function lerPrevisao(latitude: number, longitude: number): Promise<
     chuva_mm_proxima_hora: typeof chuva === "number" ? chuva : null,
     simbolo_proxima_hora: atual.data.next_1_hours?.summary?.symbol_code ?? null,
     temperatura_max_hoje: temps.length > 0 ? Math.max(...temps) : null,
+    horas_com_chuva_proximas_6h: horasComChuva,
   };
 }
 
 // Chuva de verdade: pelo menos 0,5 mm na próxima hora E o próprio serviço
 // classifica como chuva/temporal (símbolo). Os dois juntos, nunca só um.
 export const CHUVA_MIN_MM = 1.0;
-// Chuva sustentada: a previsão precisa indicar chuva em leituras seguidas
-// durante pelo menos 1 hora, em pelo menos 2 horas de previsão diferentes
-// (duas leituras seguidas dentro da mesma hora repetem a mesma previsão e não
-// confirmam nada). Uma leitura sem chuva zera a contagem.
-export const CHUVA_MIN_LEITURAS = 4;
-export const CHUVA_MIN_MINUTOS = 60;
+// Só queremos o dia CHUVOSO (chuva o dia todo, ou forte por muitas horas) —
+// nunca chuvisco ou pancada rápida. Por isso a chuva precisa:
+//  1) já estar sendo indicada em leituras seguidas por pelo menos 90 min, em
+//     pelo menos 2 horas de previsão diferentes (duas leituras na mesma hora
+//     repetem a mesma previsão e não confirmam nada); uma leitura sem chuva
+//     zera a contagem; e
+//  2) continuar: pelo menos 4 das próximas 6 horas com chuva prevista.
+export const CHUVA_MIN_LEITURAS = 8;
+export const CHUVA_MIN_MINUTOS = 90;
 export const CHUVA_MIN_HORAS_DIFERENTES = 2;
+export const CHUVA_HORA_MIN_MM = 0.5;
+export const CHUVA_MIN_HORAS_FUTURAS = 4;
+export function chuvaVaiContinuar(l: Leitura): boolean {
+  return l.horas_com_chuva_proximas_6h >= CHUVA_MIN_HORAS_FUTURAS;
+}
+
+// Chuva de verdade agora: pelo menos CHUVA_MIN_MM na próxima hora E o próprio
+// serviço classifica como chuva/temporal (símbolo). Os dois juntos.
 export function indicaChuva(l: Leitura): boolean {
   const simbolo = l.simbolo_proxima_hora ?? "";
   return (l.chuva_mm_proxima_hora ?? 0) >= CHUVA_MIN_MM && /(rain|thunder|sleet|shower)/.test(simbolo);
@@ -80,24 +98,3 @@ export function indicaCalor(l: Leitura, graus: number): boolean {
   return l.temperatura_max_hoje !== null && l.temperatura_max_hoje >= graus;
 }
 
-// Segunda fonte (OpenWeatherMap), independente da primeira: só confirma
-// "está chovendo agora". Precisa da chave OPENWEATHER_API_KEY na Vercel; sem
-// ela, a chuva só sai pela regra de chuva sustentada. Se a chave existe e a
-// consulta falha ou discorda, NÃO publica (na dúvida, não posta).
-export type SegundaFonte = { disponivel: boolean; chovendo?: boolean; detalhe?: string };
-
-export async function lerSegundaFonte(latitude: number, longitude: number): Promise<SegundaFonte> {
-  const chave = process.env.OPENWEATHER_API_KEY;
-  if (!chave) return { disponivel: false };
-  try {
-    const url = `https://api.openweathermap.org/data/2.5/weather?lat=${latitude.toFixed(4)}&lon=${longitude.toFixed(4)}&appid=${encodeURIComponent(chave)}`;
-    const res = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(10_000) });
-    if (!res.ok) return { disponivel: true, chovendo: false, detalhe: `HTTP ${res.status}` };
-    const json = (await res.json()) as { weather?: { main?: string }[]; rain?: { "1h"?: number } };
-    const grupo = json.weather?.[0]?.main ?? "";
-    const mm = json.rain?.["1h"] ?? 0;
-    return { disponivel: true, chovendo: /^(Rain|Drizzle|Thunderstorm)$/.test(grupo) || mm > 0, detalhe: `${grupo || "sem dado"}${mm ? `, ${mm} mm/h` : ""}` };
-  } catch (err) {
-    return { disponivel: true, chovendo: false, detalhe: err instanceof Error ? err.message : "erro" };
-  }
-}

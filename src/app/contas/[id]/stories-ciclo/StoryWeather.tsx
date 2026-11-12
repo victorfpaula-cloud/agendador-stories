@@ -25,11 +25,12 @@ type Post = { id: string; tipo: string; dia: string; status: string; error_messa
 type Teste = {
   cidade: string;
   ja_publicou_hoje: boolean;
-  leitura: { temperatura_agora: number | null; chuva_mm_proxima_hora: number | null; simbolo_proxima_hora: string | null; temperatura_max_hoje: number | null };
+  leitura: { temperatura_agora: number | null; chuva_mm_proxima_hora: number | null; simbolo_proxima_hora: string | null; temperatura_max_hoje: number | null; horas_com_chuva_proximas_6h: number };
   chuva: {
     indica: boolean;
     minimo_mm: number;
-    segunda_fonte: { disponivel: boolean; chovendo?: boolean; detalhe?: string } | null;
+    vai_continuar: boolean;
+    minimo_horas_futuras: number;
     sequencia: { leituras: number; desde: string | null; minimo_leituras: number; minimo_minutos: number };
   };
   calor: { indica: boolean; graus: number };
@@ -236,7 +237,7 @@ export default function StoryWeather({ accountId }: { accountId: string }) {
               <Chave ligado={config.chuva_ativa} onClick={() => salvar({ chuva_ativa: !config.chuva_ativa })} desabilitado={ocupado} />
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium text-slate-900">🌧️ Chuva</p>
-                <p className="text-xs text-slate-500">Só posta com chuva forte e sustentada: a previsão precisa indicar chuva (1 mm/h ou mais) por pelo menos 1 hora seguida, e a segunda fonte (se configurada) precisa concordar. Só sai se a conta já tiver publicado algo no dia.</p>
+                <p className="text-xs text-slate-500">Só posta em dia chuvoso: a chuva precisa já estar acontecendo há pelo menos 1h30 e continuar pelas próximas horas. Chuvisco e chuva rápida não contam. Só sai se a conta já tiver publicado algo no dia.</p>
                 <label className="mt-1 flex items-center gap-2 text-xs text-slate-600">
                   No máximo
                   <select value={config.max_chuva_por_dia} disabled={ocupado} onChange={(e) => salvar({ max_chuva_por_dia: Number(e.target.value) })} className="rounded border border-slate-300 px-1 py-0.5">
@@ -294,13 +295,9 @@ export default function StoryWeather({ accountId }: { accountId: string }) {
                 <li>📍 {teste.cidade}</li>
                 <li>🌡️ Agora: {teste.leitura.temperatura_agora ?? "—"} °C · máxima prevista hoje: {teste.leitura.temperatura_max_hoje ?? "—"} °C</li>
                 <li>🌧️ Chuva prevista na próxima hora: {teste.leitura.chuva_mm_proxima_hora ?? "—"} mm ({teste.leitura.simbolo_proxima_hora ?? "sem dado"})</li>
-                {teste.chuva.indica && (
-                  <li>
-                    🔎 Segunda fonte: {!teste.chuva.segunda_fonte?.disponivel ? "não configurada" : teste.chuva.segunda_fonte.chovendo ? `concorda (${teste.chuva.segunda_fonte.detalhe})` : `NÃO concorda (${teste.chuva.segunda_fonte.detalhe})`}
-                  </li>
-                )}
+                <li>🌦️ Horas com chuva prevista nas próximas 6h: {teste.leitura.horas_com_chuva_proximas_6h} (precisa de {teste.chuva.minimo_horas_futuras}+)</li>
                 <li>⏱️ Sequência de chuva: {teste.chuva.sequencia.leituras} leitura(s){teste.chuva.sequencia.desde ? ` desde ${new Date(teste.chuva.sequencia.desde).toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" })}` : ""} — precisa de {teste.chuva.sequencia.minimo_leituras} leituras e {teste.chuva.sequencia.minimo_minutos} min</li>
-                <li className="font-medium">{teste.chuva.indica ? "➡️ Previsão indica CHUVA (ainda não é motivo para postar: precisa se manter por 1 hora)" : `➡️ Não indica chuva (mínimo ${teste.chuva.minimo_mm} mm + classificação de chuva)`}</li>
+                <li className="font-medium">{teste.chuva.indica ? "➡️ Previsão indica CHUVA (só vira Story se for dia chuvoso: precisa se manter por 1h30 e continuar)" : `➡️ Não indica chuva (mínimo ${teste.chuva.minimo_mm} mm + classificação de chuva)`}</li>
                 <li className={teste.ja_publicou_hoje ? "" : "font-medium text-amber-700"}>{teste.ja_publicou_hoje ? "✅ A conta já publicou algo hoje — o Story Weather pode sair." : "⛔ A conta ainda não publicou nada hoje — o Story Weather NÃO sai (pode estar fechado)."}</li>
                 <li className="font-medium">{teste.frio.indica ? `➡️ Indica FRIO (≤ ${teste.frio.graus} °C agora; ainda precisa confirmar na próxima leitura)` : `➡️ Não indica frio (limite ${teste.frio.graus} °C)`}</li>
                 <li className="font-medium">{teste.calor.indica ? `➡️ Indica CALOR (≥ ${teste.calor.graus} °C)` : `➡️ Não indica calor (limite ${teste.calor.graus} °C)`}</li>
