@@ -22,6 +22,7 @@ type Item = { id: string; tipo: "chuva" | "calor"; media_url: string; media_type
 type Post = { id: string; tipo: string; dia: string; status: string; error_message: string | null; created_at: string };
 type Teste = {
   cidade: string;
+  ja_publicou_hoje: boolean;
   leitura: { temperatura_agora: number | null; chuva_mm_proxima_hora: number | null; simbolo_proxima_hora: string | null; temperatura_max_hoje: number | null };
   chuva: { indica: boolean; minimo_mm: number };
   calor: { indica: boolean; graus: number };
@@ -222,7 +223,7 @@ export default function StoryWeather({ accountId }: { accountId: string }) {
               <Chave ligado={config.chuva_ativa} onClick={() => salvar({ chuva_ativa: !config.chuva_ativa })} desabilitado={ocupado} />
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium text-slate-900">🌧️ Chuva</p>
-                <p className="text-xs text-slate-500">Posta quando a previsão indicar chuva de verdade, confirmada em duas leituras seguidas.</p>
+                <p className="text-xs text-slate-500">Posta quando a previsão indicar chuva de verdade, confirmada em duas leituras seguidas. Só sai se a conta já tiver publicado algo no dia.</p>
                 <label className="mt-1 flex items-center gap-2 text-xs text-slate-600">
                   No máximo
                   <select value={config.max_chuva_por_dia} disabled={ocupado} onChange={(e) => salvar({ max_chuva_por_dia: Number(e.target.value) })} className="rounded border border-slate-300 px-1 py-0.5">
@@ -238,7 +239,7 @@ export default function StoryWeather({ accountId }: { accountId: string }) {
               <Chave ligado={config.calor_ativo} onClick={() => salvar({ calor_ativo: !config.calor_ativo })} desabilitado={ocupado} />
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium text-slate-900">☀️ Calor</p>
-                <p className="text-xs text-slate-500">Posta uma vez no dia quando a máxima prevista chegar a:</p>
+                <p className="text-xs text-slate-500">Posta uma vez no dia (só se a conta já tiver publicado algo) quando a máxima prevista chegar a:</p>
                 <label className="mt-1 flex items-center gap-2 text-xs text-slate-600">
                   <input type="number" min={25} max={45} defaultValue={config.calor_graus} key={config.calor_graus} onBlur={(e) => Number(e.target.value) !== config.calor_graus && salvar({ calor_graus: Number(e.target.value) })} className="w-16 rounded border border-slate-300 px-1 py-0.5" />
                   °C ou mais
@@ -268,6 +269,7 @@ export default function StoryWeather({ accountId }: { accountId: string }) {
                 <li>🌡️ Agora: {teste.leitura.temperatura_agora ?? "—"} °C · máxima prevista hoje: {teste.leitura.temperatura_max_hoje ?? "—"} °C</li>
                 <li>🌧️ Chuva prevista na próxima hora: {teste.leitura.chuva_mm_proxima_hora ?? "—"} mm ({teste.leitura.simbolo_proxima_hora ?? "sem dado"})</li>
                 <li className="font-medium">{teste.chuva.indica ? "➡️ Indica CHUVA (ainda precisa confirmar na próxima leitura)" : `➡️ Não indica chuva (mínimo ${teste.chuva.minimo_mm} mm + classificação de chuva)`}</li>
+                <li className={teste.ja_publicou_hoje ? "" : "font-medium text-amber-700"}>{teste.ja_publicou_hoje ? "✅ A conta já publicou algo hoje — o Story Weather pode sair." : "⛔ A conta ainda não publicou nada hoje — o Story Weather NÃO sai (pode estar fechado)."}</li>
                 <li className="font-medium">{teste.calor.indica ? `➡️ Indica CALOR (≥ ${teste.calor.graus} °C)` : `➡️ Não indica calor (limite ${teste.calor.graus} °C)`}</li>
               </ul>
             )}

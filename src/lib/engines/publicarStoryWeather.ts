@@ -68,6 +68,30 @@ async function escolherItem(admin: Admin, accountId: string, tipo: "chuva" | "ca
   return null;
 }
 
+// Regra do Victor: o Story Weather só sai se a conta JÁ publicou alguma coisa
+// hoje em qualquer setor (Stories semanais, Story Engine, AutoStory, Agendamento
+// Único, Feed/Reels). Sem nenhuma publicação no dia = provavelmente fechado.
+// O próprio Story Weather não conta. Na dúvida (erro de leitura), não publica.
+export async function contaPublicouHoje(admin: Admin, accountId: string, dia: string): Promise<boolean> {
+  const inicio = new Date(`${dia}T00:00:00-03:00`).toISOString();
+  const fim = new Date(`${dia}T23:59:59-03:00`).toISOString();
+  const consultas = [
+    admin.from("publicacoes_historico").select("id", { count: "exact", head: true }).eq("account_id", accountId).eq("dia", dia),
+    admin.from("publish_log").select("id", { count: "exact", head: true }).eq("account_id", accountId).eq("scheduled_for", dia).eq("status", "success"),
+    admin.from("story_ciclo_posts").select("id", { count: "exact", head: true }).eq("account_id", accountId).eq("status", "success").gte("published_at", inicio).lte("published_at", fim),
+    admin.from("story_posts").select("id", { count: "exact", head: true }).eq("account_id", accountId).eq("status", "success").gte("published_at", inicio).lte("published_at", fim),
+    admin.from("story_unico_posts").select("id", { count: "exact", head: true }).eq("account_id", accountId).eq("status", "success").gte("published_at", inicio).lte("published_at", fim),
+    admin.from("feed_post_accounts").select("id", { count: "exact", head: true }).eq("account_id", accountId).eq("status", "success").gte("published_at", inicio).lte("published_at", fim),
+  ];
+  try {
+    const resultados = await Promise.all(consultas);
+    if (resultados.some((r) => r.error)) return false;
+    return resultados.some((r) => (r.count ?? 0) > 0);
+  } catch {
+    return false;
+  }
+}
+
 export async function executarStoryWeather(admin: Admin) {
   const { dataISO, horaMinuto } = agoraEmSaoPaulo();
   const agoraMin = minutos(horaMinuto);
@@ -146,6 +170,8 @@ async function tentarPublicar(
   dia: string,
   leitura: Leitura
 ): Promise<string> {
+  if (!(await contaPublicouHoje(admin, conta.id, dia))) return "sem_publicacao_hoje";
+
   const { data: antes } = await admin
     .from("story_weather_posts")
     .select("seq, status, created_at")

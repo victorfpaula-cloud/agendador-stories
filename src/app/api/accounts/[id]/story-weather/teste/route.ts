@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { agoraEmSaoPaulo } from "@/lib/days";
+import { contaPublicouHoje } from "@/lib/engines/publicarStoryWeather";
 import { CHUVA_MIN_MM, indicaCalor, indicaChuva, lerPrevisao } from "@/lib/weather";
 
 // "Testar agora": lê a previsão da cidade configurada e mostra o que o robô
@@ -12,6 +14,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     const leitura = await lerPrevisao(Number(cfg.latitude), Number(cfg.longitude));
     return NextResponse.json({
       cidade: cfg.cidade,
+      ja_publicou_hoje: await contaPublicouHoje(admin, params.id, agoraEmSaoPaulo().dataISO),
       leitura,
       chuva: { indica: indicaChuva(leitura), minimo_mm: CHUVA_MIN_MM },
       calor: { indica: indicaCalor(leitura, cfg.calor_graus), graus: cfg.calor_graus },
