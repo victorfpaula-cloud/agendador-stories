@@ -208,6 +208,16 @@ function ContaCard({
   const [aviso, setAviso] = useState<string | null>(null);
 
   async function alternarPausa() {
+    // Pausar é fácil de clicar sem querer e a conta para de publicar tudo:
+    // pede confirmação. Retomar não precisa.
+    if (
+      conta.is_active &&
+      !confirm(
+        `Pausar a conta "${conta.name}"?\n\nEnquanto estiver pausada, NENHUM Story ou publicação dela sai no Instagram. Você pode retomar quando quiser.`
+      )
+    ) {
+      return;
+    }
     setCarregando(true);
     setErro(null);
     try {
