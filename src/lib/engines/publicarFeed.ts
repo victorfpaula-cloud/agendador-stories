@@ -28,9 +28,15 @@ function formatarDataHoraSaoPaulo(iso: string): string {
 // conta e entra no e-mail. Contas que já publicaram com sucesso não são
 // re-tentadas.
 const LIMITE_TENTATIVAS = 3;
+// A função da Vercel morre aos 60s: o cross-post só roda enquanto sobrar folga
+// até esse orçamento.
+const ORCAMENTO_EXECUCAO_MS = 50_000;
 
 export async function executarPublicarFeed(admin: ReturnType<typeof createAdminClient>) {
   const agoraISO = new Date().toISOString();
+  const inicioExecucao = Date.now();
+
+  await recuperarPostsTravados(admin);
 
   const { data: devidos, error } = await admin
     .from("feed_posts")
@@ -118,6 +124,11 @@ export async function executarPublicarFeed(admin: ReturnType<typeof createAdminC
     // retentados passam por aqui de novo) — accounts 'success'/'error' de
     // antes contam pro resultado final mesmo que não sejam re-tentadas
     // nesta rodada.
+    // Cross-post pro Facebook fica pra DEPOIS de salvar o status do post (ver
+    // mais abaixo): o envio de um Reels pro Facebook é lento e, feito aqui no
+    // meio, estourava o limite de 60s da função — o Instagram já tinha
+    // publicado, mas o post ficava preso em "publicando" (achado em 14/11/2026).
+    const crossPostsPendentes: { contaAlvo: (typeof contasParaTentar)[number]; conta: Account }[] = [];
     let algumSucesso = contasAlvo.some((c) => c.status === "success");
     // Contas que já estavam em erro ANTES desta rodada (inclui "dia fechado" de
     // rodadas anteriores) contam como erro definitivo; as fechadas agora, não
@@ -182,30 +193,10 @@ export async function executarPublicarFeed(admin: ReturnType<typeof createAdminC
         algumSucesso = true;
 
         // Cross-post pro Facebook: best-effort, só depois que o Instagram já
-        // saiu de verdade. Uma falha aqui nunca mexe no status acima (que já
-        // está salvo) nem entra no e-mail de erro — só fica registrada pra
-        // dar pra investigar depois, ver supabase/cross-post-facebook.sql.
-        if (conta.cross_post_facebook) {
-          try {
-            await publicarCrossPostNaPagina({
-              pageId: conta.page_id,
-              pageAccessToken: conta.page_access_token,
-              mediaType: post.media_type,
-              itens: midiasComUrl.map((m) => ({ mediaUrl: m.media_url, mediaType: m.media_type })),
-              caption: post.caption,
-            });
-            await admin
-              .from("feed_post_accounts")
-              .update({ fb_cross_post_status: "success", fb_cross_post_error: null })
-              .eq("id", contaAlvo.id);
-          } catch (err) {
-            const msg = err instanceof MetaApiError || err instanceof Error ? err.message : "Erro desconhecido";
-            await admin
-              .from("feed_post_accounts")
-              .update({ fb_cross_post_status: "error", fb_cross_post_error: msg })
-              .eq("id", contaAlvo.id);
-          }
-        }
+        // saiu de verdade (e depois do status do post ser salvo). Uma falha
+        // nunca mexe no status do Instagram nem entra no e-mail de erro — só
+        // fica registrada, ver supabase/cross-post-facebook.sql.
+        if (conta.cross_post_facebook) crossPostsPendentes.push({ contaAlvo, conta });
       } catch (err) {
         const msg = err instanceof MetaApiError || err instanceof Error ? err.message : "Erro desconhecido";
         await falharTentativaConta(contaAlvo, conta, msg);
@@ -244,6 +235,48 @@ export async function executarPublicarFeed(admin: ReturnType<typeof createAdminC
       });
     }
 
+    // Cross-post pro Facebook, agora que o status do post já está salvo. Cada
+    // envio tem tempo máximo (e só roda se ainda sobrar folga dentro dos 60s da
+    // função); se não der, fica registrado como erro e a mídia NÃO é apagada
+    // agora (a poda de posts antigos cuida dela depois).
+    let crossPostFalhou = false;
+    for (const { contaAlvo, conta } of crossPostsPendentes) {
+      const restanteMs = ORCAMENTO_EXECUCAO_MS - (Date.now() - inicioExecucao);
+      if (restanteMs < 8_000) {
+        crossPostFalhou = true;
+        await admin
+          .from("feed_post_accounts")
+          .update({ fb_cross_post_status: "error", fb_cross_post_error: "Sem tempo nesta rodada pra enviar ao Facebook." })
+          .eq("id", contaAlvo.id);
+        continue;
+      }
+      try {
+        await Promise.race([
+          publicarCrossPostNaPagina({
+            pageId: conta.page_id,
+            pageAccessToken: conta.page_access_token,
+            mediaType: post.media_type,
+            itens: midiasComUrl.map((m) => ({ mediaUrl: m.media_url, mediaType: m.media_type })),
+            caption: post.caption,
+          }),
+          new Promise<never>((_, rejeitar) =>
+            setTimeout(() => rejeitar(new Error("O Facebook demorou demais pra responder.")), Math.min(30_000, restanteMs))
+          ),
+        ]);
+        await admin
+          .from("feed_post_accounts")
+          .update({ fb_cross_post_status: "success", fb_cross_post_error: null })
+          .eq("id", contaAlvo.id);
+      } catch (err) {
+        crossPostFalhou = true;
+        const msg = err instanceof MetaApiError || err instanceof Error ? err.message : "Erro desconhecido";
+        await admin
+          .from("feed_post_accounts")
+          .update({ fb_cross_post_status: "error", fb_cross_post_error: msg })
+          .eq("id", contaAlvo.id);
+      }
+    }
+
     // Publicou com sucesso em todas as contas-alvo? A mídia original não
     // precisa mais ficar no Storage — o Instagram já buscou ela na hora de
     // publicar, e a miniatura pequena (gerada no navegador pro fluxo manual,
@@ -255,7 +288,7 @@ export async function executarPublicarFeed(admin: ReturnType<typeof createAdminC
     // foi ao ar. Best-effort: se der algum problema aqui, não desfaz nem
     // afeta o status já salvo acima — o pior caso é um arquivo esquecido no
     // bucket, não um post com status errado.
-    if (statusFinal === "success") {
+    if (statusFinal === "success" && !crossPostFalhou) {
       try {
         const paths = midias.map((m) => m.media_path).filter((p): p is string => !!p);
         if (paths.length > 0) {
@@ -283,6 +316,42 @@ export async function executarPublicarFeed(admin: ReturnType<typeof createAdminC
     detalhes: resultados,
     podados,
   };
+}
+
+// Rede de segurança: post preso em "publicando" por mais de 15 min (a função
+// morreu no meio). Se nenhuma conta ficou pendente, fecha o post com o que
+// aconteceu (sucesso/erro por conta); se ainda sobrou conta pendente, devolve
+// pra fila — contas que já publicaram NUNCA são tentadas de novo.
+async function recuperarPostsTravados(admin: ReturnType<typeof createAdminClient>) {
+  try {
+    const limite = new Date(Date.now() - 15 * 60_000).toISOString();
+    const { data: travados } = await admin
+      .from("feed_posts")
+      .select("id, feed_post_accounts(status, published_at)")
+      .eq("status", "publishing")
+      .lt("scheduled_at", limite);
+    for (const p of (travados ?? []) as { id: string; feed_post_accounts: { status: string; published_at: string | null }[] }[]) {
+      const contas = p.feed_post_accounts ?? [];
+      if (contas.length === 0) continue;
+      if (contas.some((c) => c.status === "pending")) {
+        await admin.from("feed_posts").update({ status: "pending" }).eq("id", p.id).eq("status", "publishing");
+        continue;
+      }
+      const publicadoEm = contas.map((c) => c.published_at).filter((d): d is string => !!d).sort().pop() ?? null;
+      const houveErro = contas.some((c) => c.status === "error");
+      await admin
+        .from("feed_posts")
+        .update({
+          status: houveErro ? "error" : "success",
+          published_at: publicadoEm,
+          error_message: houveErro ? "Falhou em pelo menos uma conta-alvo — veja o detalhe por conta." : null,
+        })
+        .eq("id", p.id)
+        .eq("status", "publishing");
+    }
+  } catch {
+    // Rede de segurança: nunca atrapalha a rodada normal.
+  }
 }
 
 // Quantos posts publicados ficam guardados na tela (só o registro + a
