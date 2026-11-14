@@ -319,47 +319,33 @@ export async function executarPublicarFeed(admin: ReturnType<typeof createAdminC
 }
 
 // Rede de segurança: post preso em "publicando" por mais de 15 min (a função
-// morreu no meio). NUNCA ressuscita post antigo: só devolve pra fila o que
-// travou nas últimas 6 horas. Post travado há mais tempo que isso é encerrado
-// como erro (pendente vira erro) pra não sair fora de hora — foi o que
-// republicou, em 14/11/2026, um carrossel de 27/10. Contas que já publicaram
-// NUNCA são tentadas de novo.
-const JANELA_RECUPERACAO_MS = 6 * 60 * 60 * 1000;
-
+// morreu no meio). NUNCA publica de novo por conta própria: quando a função
+// morre no meio, o Instagram muitas vezes JÁ publicou e só o registro ficou
+// pra trás — repostar duplicaria (aconteceu em 14/11/2026, com três posts
+// antigos). Então só FECHA o registro: contas que já publicaram contam como
+// sucesso; conta ainda pendente vira erro, com e-mail pro Victor conferir no
+// Instagram e, se precisar, publicar manualmente.
 async function recuperarPostsTravados(admin: ReturnType<typeof createAdminClient>) {
   try {
     const limite = new Date(Date.now() - 15 * 60_000).toISOString();
     const { data: travados } = await admin
       .from("feed_posts")
-      .select("id, scheduled_at, feed_post_accounts(id, status, published_at)")
+      .select("id, media_type, scheduled_at, feed_post_accounts(id, status, published_at, accounts(name))")
       .eq("status", "publishing")
       .lt("scheduled_at", limite);
-    for (const p of (travados ?? []) as {
-      id: string;
-      scheduled_at: string;
-      feed_post_accounts: { id: string; status: string; published_at: string | null }[];
-    }[]) {
-      const contas = p.feed_post_accounts ?? [];
+    for (const p of (travados ?? []) as any[]) {
+      const contas = (p.feed_post_accounts ?? []) as { id: string; status: string; published_at: string | null; accounts: { name: string } | null }[];
       if (contas.length === 0) continue;
-      const antigo = Date.now() - new Date(p.scheduled_at).getTime() > JANELA_RECUPERACAO_MS;
       const pendentes = contas.filter((c) => c.status === "pending");
-
-      if (pendentes.length > 0 && !antigo) {
-        await admin.from("feed_posts").update({ status: "pending" }).eq("id", p.id).eq("status", "publishing");
-        continue;
-      }
-      if (pendentes.length > 0 && antigo) {
-        // Velho demais pra sair agora: encerra sem publicar.
-        for (const c of pendentes) {
-          await admin
-            .from("feed_post_accounts")
-            .update({ status: "error", error_message: "Ficou travado e passou muito do horário — não foi publicado fora de hora." })
-            .eq("id", c.id);
-        }
+      for (const c of pendentes) {
+        await admin
+          .from("feed_post_accounts")
+          .update({ status: "error", error_message: "A execução travou no meio. Confira no Instagram se saiu e, se não saiu, publique manualmente." })
+          .eq("id", c.id);
       }
       const publicadoEm = contas.map((c) => c.published_at).filter((d): d is string => !!d).sort().pop() ?? null;
       const houveErro = pendentes.length > 0 || contas.some((c) => c.status === "error");
-      await admin
+      const { data: fechado } = await admin
         .from("feed_posts")
         .update({
           status: houveErro ? "error" : "success",
@@ -367,7 +353,18 @@ async function recuperarPostsTravados(admin: ReturnType<typeof createAdminClient
           error_message: houveErro ? "Falhou em pelo menos uma conta-alvo — veja o detalhe por conta." : null,
         })
         .eq("id", p.id)
-        .eq("status", "publishing");
+        .eq("status", "publishing")
+        .select("id");
+      if (pendentes.length > 0 && fechado && fechado.length > 0) {
+        await enviarEmail({
+          assunto: `Post travado — confira no Instagram (${p.media_type})`,
+          corpo:
+            `Uma publicação agendada pra ${formatarDataHoraSaoPaulo(p.scheduled_at)} ficou presa no meio da execução, ` +
+            `nas contas: ${pendentes.map((c) => c.accounts?.name ?? "—").join(", ")}.\n\n` +
+            `Ela NÃO foi publicada de novo automaticamente (podia já estar no ar). ` +
+            `Confira no Instagram e, se não saiu, publique manualmente.`,
+        });
+      }
     }
   } catch {
     // Rede de segurança: nunca atrapalha a rodada normal.
