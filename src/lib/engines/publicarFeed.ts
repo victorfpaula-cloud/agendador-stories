@@ -319,26 +319,46 @@ export async function executarPublicarFeed(admin: ReturnType<typeof createAdminC
 }
 
 // Rede de segurança: post preso em "publicando" por mais de 15 min (a função
-// morreu no meio). Se nenhuma conta ficou pendente, fecha o post com o que
-// aconteceu (sucesso/erro por conta); se ainda sobrou conta pendente, devolve
-// pra fila — contas que já publicaram NUNCA são tentadas de novo.
+// morreu no meio). NUNCA ressuscita post antigo: só devolve pra fila o que
+// travou nas últimas 6 horas. Post travado há mais tempo que isso é encerrado
+// como erro (pendente vira erro) pra não sair fora de hora — foi o que
+// republicou, em 14/11/2026, um carrossel de 27/10. Contas que já publicaram
+// NUNCA são tentadas de novo.
+const JANELA_RECUPERACAO_MS = 6 * 60 * 60 * 1000;
+
 async function recuperarPostsTravados(admin: ReturnType<typeof createAdminClient>) {
   try {
     const limite = new Date(Date.now() - 15 * 60_000).toISOString();
     const { data: travados } = await admin
       .from("feed_posts")
-      .select("id, feed_post_accounts(status, published_at)")
+      .select("id, scheduled_at, feed_post_accounts(id, status, published_at)")
       .eq("status", "publishing")
       .lt("scheduled_at", limite);
-    for (const p of (travados ?? []) as { id: string; feed_post_accounts: { status: string; published_at: string | null }[] }[]) {
+    for (const p of (travados ?? []) as {
+      id: string;
+      scheduled_at: string;
+      feed_post_accounts: { id: string; status: string; published_at: string | null }[];
+    }[]) {
       const contas = p.feed_post_accounts ?? [];
       if (contas.length === 0) continue;
-      if (contas.some((c) => c.status === "pending")) {
+      const antigo = Date.now() - new Date(p.scheduled_at).getTime() > JANELA_RECUPERACAO_MS;
+      const pendentes = contas.filter((c) => c.status === "pending");
+
+      if (pendentes.length > 0 && !antigo) {
         await admin.from("feed_posts").update({ status: "pending" }).eq("id", p.id).eq("status", "publishing");
         continue;
       }
+      if (pendentes.length > 0 && antigo) {
+        // Velho demais pra sair agora: encerra sem publicar.
+        for (const c of pendentes) {
+          await admin
+            .from("feed_post_accounts")
+            .update({ status: "error", error_message: "Ficou travado e passou muito do horário — não foi publicado fora de hora." })
+            .eq("id", c.id);
+        }
+      }
       const publicadoEm = contas.map((c) => c.published_at).filter((d): d is string => !!d).sort().pop() ?? null;
-      const houveErro = contas.some((c) => c.status === "error");
+      const houveErro = pendentes.length > 0 || contas.some((c) => c.status === "error");
       await admin
         .from("feed_posts")
         .update({
