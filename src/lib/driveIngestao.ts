@@ -14,6 +14,7 @@ import {
   obterAccessToken,
 } from "@/lib/drive";
 import { extrairTextoPdf } from "@/lib/drivePdf";
+import { ajustarBufferFeed } from "@/lib/feedProporcao";
 import type { DriveConfig } from "@/types/database";
 
 // Lê a pasta do dia no Google Drive e cria o post automático de uma conta —
@@ -184,9 +185,20 @@ export async function executarLeituraDrive(
       thumbnailDataUrl: string | null;
     }[] = [];
     for (const arquivo of midiasParaUsar) {
-      const buffer = await baixarArquivoDrive(accessToken, arquivo.id);
+      let buffer = await baixarArquivoDrive(accessToken, arquivo.id);
+      let mimeEnvio = arquivo.mimeType;
+      let nomeEnvio = arquivo.name;
       const tipo: "IMAGE" | "VIDEO" = arquivo.mimeType.startsWith("video/") ? "VIDEO" : "IMAGE";
-      const enviado = await enviarMidiaBuffer(admin, "feed-media", "drive", buffer, arquivo.mimeType, arquivo.name);
+      // Foto fora de 4:5 vira 4:5 centralizada, sem bordas (ver feedProporcao.ts).
+      if (tipo === "IMAGE") {
+        const ajustado = await ajustarBufferFeed(buffer, midiasParaUsar.length > 1);
+        if (ajustado) {
+          buffer = ajustado.buffer;
+          mimeEnvio = ajustado.mime;
+          nomeEnvio = `foto.${ajustado.ext}`;
+        }
+      }
+      const enviado = await enviarMidiaBuffer(admin, "feed-media", "drive", buffer, mimeEnvio, nomeEnvio);
       const thumbnailDataUrl = arquivo.thumbnailLink
         ? await baixarThumbnailDrive(accessToken, arquivo.thumbnailLink)
         : null;

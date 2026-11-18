@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { FeedMediaType, MediaType } from "@/types/database";
+import { ajustarArquivoFeed } from "@/lib/feedProporcao";
+
+export const maxDuration = 60;
 
 // Cria uma publicação agendada (feed/Reels/carrossel). Cobre broadcast pra
 // várias contas de uma vez desde o passo 3: mesma mídia + mesma legenda,
@@ -55,6 +58,16 @@ export async function POST(req: NextRequest) {
   // 1 foto vira post normal, 2 ou mais (qualquer mistura) vira carrossel.
   const mediaType: FeedMediaType =
     mediaItems.length > 1 ? "CAROUSEL" : mediaItems[0].mediaType === "VIDEO" ? "REELS" : "IMAGE";
+
+  // Foto fora de 4:5 vira 4:5 centralizada, sem bordas (ver feedProporcao.ts).
+  for (const m of mediaItems) {
+    if (m.mediaType !== "IMAGE" || !m.path) continue;
+    const ajustado = await ajustarArquivoFeed(admin, m.path, mediaItems.length > 1);
+    if (ajustado) {
+      m.url = ajustado.url;
+      m.path = ajustado.path;
+    }
+  }
 
   try {
     const { data: post, error: erroPost } = await admin
